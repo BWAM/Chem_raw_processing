@@ -1,0 +1,153 @@
+---
+title: "RIBS_EDD_processing"
+author: "Gavin Lemley"
+date: "January 11, 2019"
+output: html_document
+---
+
+## R Markdown
+
+Find the R-project root directory to simplify file path designations.
+```{r}
+root.dir <- rprojroot::find_root("raw_processing.Rproj")
+```
+
+
+Main process: 
+1) Loads in EDD components from each folder contained in the target directory. 
+2) Adds SiteID and DEC_sampletype fields to each Sample_v3.
+3) Merges TestResultQC_v3 and Sample_v3 files together for each EDD set.
+```{r}
+
+folder_list <- list.files(path = file.path(root.dir, "data_input", "2017minnewaska"))
+nfolder_list = length(folder_list)
+RSfile_list <- list()
+RSfile_list.sample <- list()
+
+i=1
+for (i in 1:nfolder_list){
+  print(folder_list[i])
+  input.i <- file.path(root.dir, "data_input", "2017minnewaska", folder_list[i])
+  output.i <- file.path(root.dir, "data_output")
+  
+  temp_result <- read.table(file.path(input.i,"TestResultQC_v3.txt"),
+                                      sep=",",fill=TRUE,header=FALSE,stringsAsFactors=FALSE,
+                    col.names = c("sys_sample_code","lab_anl_method_name","analysis_date","fraction","column_number",
+                                  "test_type","lab_matrix_code","analysis_location","basis","container_id","dilution_factor",
+                                  "prep_method","prep_date","leachate_method","leachate_date","lab_name_code","qc_level",
+                                  "lab_sample_id","percent_moisture","subsample_amount","subsample_amount_unit","analyst_name",
+                                  "instrument_id","comment","preservative","final_volume","final_volume_unit","cas_rn","chemical_name",
+                                  "result_value","result_error_delta","result_type_code","reportable_result","detect_flag",
+                                  "lab_qualifiers","validator_qualifiers","interpreted_qualifiers","validated_yn",
+                                  "method_detection_limit","reporting_detection_limit","quantitation_limit","result_unit",
+                                  "detection_limit_unit","tic_retention_time","minimum_detectable_conc","counting_error","uncertainty",
+                                  "critical_value","validation_level","result_comment","qc_original_conc","qc_spike_added",
+                                  "qc_spike_measured","qc_spike_recovery","qc_dup_original_conc","qc_dup_spike_added",
+                                  "qc_dup_spike_measured","qc_dup_spike_recovery","qc_rpd","qc_spike_lcl","qc_spike_ucl","qc_rpd_cl",
+                                  "qc_spike_status","qc_dup_spike_status","qc_rpd_status","lab_sdg")
+                    )
+ 
+   ### ABOVE BRINGS IN FACTOR AS LOGICAL. Below converts all "T"s to "TRUE"s. May want to specify all column classes instead.  ###
+   temp_result$fraction <- as.character(temp_result$fraction)
+   temp_result$fraction <- plyr::revalue(temp_result$fraction, c("TRUE" = "T"))
+   
+  temp_sample <- read.table(file.path(input.i,"Sample_v3.txt"),
+                            sep=",",fill=TRUE,header=FALSE, stringsAsFactors=FALSE,
+                    col.names = c("#data_provider","sys_sample_code","sample_name","sample_matrix_code","sample_type_code",
+                                  "sample_source","parent_sample_code","sample_delivery_group","sample_date","sys_loc_code",
+                                  "start_depth","end_depth","depth_unit","chain_of_custody","sent_to_lab_date","sample_receipt_date",
+                                  "sampler","sampling_company_code","sampling_reason","sampling_technique","task_code",
+                                  "collection_quarter","composite_yn","composite_desc","sample_class","custom_field_1","custom_field_2",
+                                  "custom_field_3","comment"))
+
+  ### Creating new fields: SiteID and DEC_sample_type ###
+  
+  # Generate site IDs for field data by pulling info from sample_name before 3rd "-".
+  temp_sample$SiteID <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N", 
+                               sub("^(([^-]*-){2}[^-]*).*","\\1" , temp_sample$sample_name), NA)
+  # Generate DEC_sample_type column and and populate with EB code as needed.
+  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N" &
+                                          grepl("EB",temp_sample$sample_name),"EB", NA)
+  # Populate DEC_sample_type for duplicate samples as needed.
+  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N" &
+                                          grepl("DUP",temp_sample$sample_name),"DUP",temp_sample$DEC_sample_type)
+
+    
+  # Populate DEC_sample_type for N_DUPPARENT cells by locating DUP samples and finding parent sample. 
+      # Accounts for different DUP variants (" DUP"", "-DUP", "WSDUP")
+      # Cleaner way to do this???
+
+  dup.vec <- temp_sample$sample_name[temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N" 
+                                     & grepl(" DUP", temp_sample$sample_name)]
+  parent.vec <- gsub(" DUP", "", dup.vec)
+  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N" 
+                                         & temp_sample$sample_name %in% parent.vec,"N_DUPPARENT",temp_sample$DEC_sample_type)
+  
+  dup.vec <- temp_sample$sample_name[temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N"
+                                     & grepl("-DUP", temp_sample$sample_name)]
+  parent.vec <- gsub("-DUP", "", dup.vec)
+  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N" 
+                                         & temp_sample$sample_name %in% parent.vec,"N_DUPPARENT",temp_sample$DEC_sample_type)
+  
+  dup.vec <- temp_sample$sample_name[temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N"
+                                     & grepl("WSDUP", temp_sample$sample_name)]
+  parent.vec <- gsub("WSDUP", "WS", dup.vec)
+  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N"
+                                         & temp_sample$sample_name %in% parent.vec,"N_DUPPARENT",temp_sample$DEC_sample_type)
+  
+  dup.vec <- temp_sample$sample_name[temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N"
+                                     & grepl("WDUP", temp_sample$sample_name)]
+  parent.vec <- gsub("WDUP", "W", dup.vec)
+  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N"
+                                         & temp_sample$sample_name %in% parent.vec,"N_DUPPARENT",temp_sample$DEC_sample_type)
+  
+  # Populate remaining DEC_sample_type cells for field data with "N" for normal samples.
+  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N" &
+                                          is.na(temp_sample$DEC_sample_type),"N",temp_sample$DEC_sample_type)
+
+
+  # Convert all NAs in temp_sample$DEC_sample_type to avoid subsetting issues in QAQC script (found that bracket subsetting in a column that contains NAs returns NA rows)
+  temp_sample$DEC_sample_type[is.na(temp_sample$DEC_sample_type)] <- "Lab"
+  
+  # Must merge by sys_sample_code and not sample_name in order to appropriately associate MS, dissolved samples (sometimes "Diss" or "S" added to end of sys_sample_code), and other lab samples with appropriate results.
+  temp_RSmerge <- merge(temp_result,temp_sample,by="sys_sample_code", all=TRUE)
+
+  filenm <- file.path(output.i,
+                      paste(folder_list[i],"_RSmerge.csv", sep=""))
+  # print(filenm)
+
+  if ((nrow(temp_result)) < (nrow(temp_RSmerge))) {
+    stop('SCRIPT STOPPED: Extra records created in merge. Check EDD for errors.')
+  }
+  if ((nrow(temp_result)) > (nrow(temp_RSmerge))) {
+    stop('SCRIPT STOPPED: Not enough records created with merge. Check for errors.')
+  }
+
+  # Create name using EDD and added suffix, and assign to current data frame
+  mergenm <- paste0(folder_list[i], "_RSmerge")
+  mergefile <- assign(mergenm, temp_RSmerge)
+  # Do the same for only sample file data for troubleshooting
+  mergenm.sample <- paste0(folder_list[i], "_Samplemerge")
+  mergefile.sample <- assign(mergenm, temp_sample)
+
+  #Add current data frame to the list of all dataframes
+  RSfile_list[[i]] <- mergefile
+  RSfile_list.sample[[i]] <- mergefile.sample
+
+  # Export each merged EDD as CSVs (optional)
+  # write.table(temp_RSmerge, file=filenm,sep=",", row.names = FALSE)
+    
+}
+```
+
+Bind all data frames (merged EDDs) in "list of data frames" together into a single data frame and write to a CSV.
+```{r}
+# setwd(ouput_dir)
+RIBSdata = do.call(rbind, RSfile_list)
+RIBSdata.sample = do.call(rbind, RSfile_list.sample)
+
+write.table(RIBSdata, file= file.path(root.dir, "data_output", "2017-Minnewaksa_EDD-merge-bind_2-11-19.csv"),sep=",", row.names = FALSE)
+write.table(RIBSdata.sample, file= file.path(root.dir, "data_output", "2017-Minnewaksa_SAMPLE_merge-bind_2-11-19.csv"),sep=",", row.names = FALSE)
+
+```
+
