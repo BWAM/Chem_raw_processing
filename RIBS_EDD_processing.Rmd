@@ -145,6 +145,16 @@ RIBSdata = do.call(rbind, RSfile_list)
 RIBSdata.sample = do.call(rbind, RSfile_list.sample)
 
 
+
+#####
+
+# ADD CHECK TO SEE IF COUNT OF DUPS MATCHES N_DUPPARENTS
+
+#####
+
+
+
+
 ```
 
 See if matches for generated site IDs exist in master sites table
@@ -168,16 +178,14 @@ siteids.present <- unique(RIBSdata$SiteID[!is.na(RIBSdata$SiteID)])
 siteids.mismatch <- siteids.present[!(siteids.present %in% sites.master$BAS_LOC_RM)]
 siteids.match <- siteids.present[(siteids.present %in% sites.master$BAS_LOC_RM)]
 
-######
-# Prepare code for renaming mismatched site IDs and print to console. This will be pasted into the chunk below.
+# Prepare code for renaming mismatched site IDs and print to console to be pasted into the chunk below.
 siteids.mismatch.code <- paste0("    SiteID == '",siteids.mismatch,"' ~ '",siteids.mismatch,"',")
 cat(siteids.mismatch.code,sep="\n")
-######
 
 ```
 
 ######
-Manually correct mismatched site IDs
+Manually correct site IDs that couldn't be located in master sites table.
 Before running this, paste the output code from above and correct the 2nd instance of each site ID (after the ~).
 ######
 
