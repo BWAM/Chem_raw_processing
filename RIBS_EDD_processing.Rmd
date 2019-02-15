@@ -7,10 +7,23 @@ output: html_document
 
 ## R Markdown
 
-Load libraries and find the R-project root directory to simplify file path designations.
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+Load libraries, find the R-project root directory, and specify input/output files.
 ```{r}
 library(dplyr)
 root.dir <- rprojroot::find_root("Chem_raw_processing.Rproj")
+
+##### User-defined variables #####
+
+input.path <- file.path(root.dir, "data_input", "2018", "Ramapo")
+output.path <- file.path(root.dir, "data_output", "2018", "Ramapo")
+output.filename <- "2018_Ramapo_chem_raw_2-15-19.csv"
+
+##################################
+
 ```
 
 Main process: 
@@ -19,7 +32,8 @@ Main process:
 3) Merges TestResultQC_v3 and Sample_v3 files together for each EDD set.
 ```{r}
 
-folder_list <- list.files(path = file.path(root.dir, "data_input", "2018_ramapo"))
+# folder_list <- list.files(path = file.path(root.dir, "data_input", "2018", "Ramapo"))
+folder_list <- list.files(path = input.path)
 nfolder_list = length(folder_list)
 RSfile_list <- list()
 RSfile_list.sample <- list()
@@ -27,7 +41,8 @@ RSfile_list.sample <- list()
 i=1
 for (i in 1:nfolder_list){
   print(folder_list[i])
-  input.i <- file.path(root.dir, "data_input", "2018_ramapo", folder_list[i])
+  # input.i <- file.path(root.dir, "data_input", "2018", "Ramapo", folder_list[i])
+  input.i <- paste0(input.path, "/", folder_list[i])
   output.i <- file.path(root.dir, "data_output")
   
   temp_result <- read.table(file.path(input.i,"TestResultQC_v3.txt"),
@@ -47,9 +62,9 @@ for (i in 1:nfolder_list){
                                   "qc_spike_status","qc_dup_spike_status","qc_rpd_status","lab_sdg")
                     )
  
-   ### ABOVE BRINGS IN FACTOR AS LOGICAL. Below converts all "T"s to "TRUE"s. May want to specify all column classes instead.  ###
-   temp_result$fraction <- as.character(temp_result$fraction)
-   temp_result$fraction <- plyr::revalue(temp_result$fraction, c("TRUE" = "T"))
+  ### ABOVE BRINGS IN FACTOR AS LOGICAL. Below converts all "T"s to "TRUE"s. May want to specify all column classes instead.  ###
+  temp_result$fraction <- as.character(temp_result$fraction)
+  temp_result$fraction <- plyr::revalue(temp_result$fraction, c("TRUE" = "T"), warn_missing = FALSE)
    
   temp_sample <- read.table(file.path(input.i,"Sample_v3.txt"),
                             sep=",",fill=TRUE,header=FALSE, stringsAsFactors=FALSE,
@@ -76,7 +91,12 @@ for (i in 1:nfolder_list){
   # Populate DEC_sample_type for N_DUPPARENT cells by locating DUP samples and finding parent sample. 
       # Accounts for different DUP variants (" DUP"", "-DUP", "WSDUP")
       # Cleaner way to do this???
+      
+  
+### ACCOUNT FOR UPPER AND LOWER CASE in below (see QAQC.Rmd) ###
 
+  
+  
   dup.vec <- temp_sample$sample_name[temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N" 
                                      & grepl(" DUP", temp_sample$sample_name)]
   parent.vec <- gsub(" DUP", "", dup.vec)
@@ -100,6 +120,22 @@ for (i in 1:nfolder_list){
   parent.vec <- gsub("WDUP", "W", dup.vec)
   temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N"
                                          & temp_sample$sample_name %in% parent.vec,"N_DUPPARENT",temp_sample$DEC_sample_type)
+  
+  
+  # Count number of DUP and N_DUPPARENT codes assigned and make sure they're equal
+  dup.count <- length(grep("^DUP$", temp_sample$DEC_sample_type))
+  dupparent.count <- length(grep("N_DUPPARENT", temp_sample$DEC_sample_type))
+  
+  if(identical(dup.count,dupparent.count) == FALSE){
+    stop("    DUP and N_DUPPARENT counts do not match (script stopped)")
+  }
+
+### Move this check to after binding data, see how many DUPS, DUP parents, EBs (MSs?) exist. Need to subset data and look at DEC_sample_type.
+  # Okay if single SDGs don't have certain QAQC samples, but give warning if full set is missing any (and give total count).
+    if(dup.count == 0 | dupparent.count == 0){
+    warning("    WARNING: NO DUPLICATES PRESENT\n")
+  }
+  
   
   # Populate remaining DEC_sample_type cells for field data with "N" for normal samples.
   temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N" &
@@ -126,13 +162,13 @@ for (i in 1:nfolder_list){
   # Create name using EDD and added suffix, and assign to current data frame
   mergenm <- paste0(folder_list[i], "_RSmerge")
   mergefile <- assign(mergenm, temp_RSmerge)
-  # Do the same for only sample file data for troubleshooting
-  mergenm.sample <- paste0(folder_list[i], "_Samplemerge")
-  mergefile.sample <- assign(mergenm, temp_sample)
+  # Do the same for only sample file data (for troubleshooting group EDD issues)
+  # mergenm.sample <- paste0(folder_list[i], "_Samplemerge")
+  # mergefile.sample <- assign(mergenm, temp_sample)
 
   #Add current data frame to the list of all dataframes
   RSfile_list[[i]] <- mergefile
-  RSfile_list.sample[[i]] <- mergefile.sample
+  # RSfile_list.sample[[i]] <- mergefile.sample
 
   # Export each merged EDD as CSVs (optional)
   # write.table(temp_RSmerge, file=filenm,sep=",", row.names = FALSE)
@@ -142,22 +178,11 @@ for (i in 1:nfolder_list){
 
 #Bind all data frames (merged sample-result files) into one
 RIBSdata = do.call(rbind, RSfile_list)
-RIBSdata.sample = do.call(rbind, RSfile_list.sample)
-
-
-
-#####
-
-# ADD CHECK TO SEE IF COUNT OF DUPS MATCHES N_DUPPARENTS
-
-#####
-
-
-
+# RIBSdata.sample = do.call(rbind, RSfile_list.sample)
 
 ```
 
-See if matches for generated site IDs exist in master sites table
+See if matches for generated site IDs exist in master sites table. If mismatches are found, process into code for copy/pasting into next chunk for correcting. 2nd instance of each site ID (after the ~) to be corrected manually after pasting next chunk.
 ```{r}
 sites.master <- read.csv("data_input/Sites_2017-2018_Charlie.csv")
 # sites.master <- read.csv("data_input/Sites_2018-12-17_Di.csv")
@@ -178,18 +203,23 @@ siteids.present <- unique(RIBSdata$SiteID[!is.na(RIBSdata$SiteID)])
 siteids.mismatch <- siteids.present[!(siteids.present %in% sites.master$BAS_LOC_RM)]
 siteids.match <- siteids.present[(siteids.present %in% sites.master$BAS_LOC_RM)]
 
-# Prepare code for renaming mismatched site IDs and print to console to be pasted into the chunk below.
-siteids.mismatch.code <- paste0("    SiteID == '",siteids.mismatch,"' ~ '",siteids.mismatch,"',")
-cat(siteids.mismatch.code,sep="\n")
+# See if mismatches exist. If so (else), prepare code for renaming mismatched site IDs and print to console to be pasted into the chunk below. 2nd instance of each site ID (after the ~) to be corrected manually after pasting in chunk below.
+if (length(siteids.mismatch) == 0 & length(siteids.match) > 0) {
+  print("Match found all site IDs.")
+} else{
+  siteids.mismatch.code <- paste0("    SiteID == '",siteids.mismatch,"' ~ '",siteids.mismatch,"',")
+  cat(siteids.mismatch.code,sep="\n")
+}
 
 ```
 
 ######
-Manually correct site IDs that couldn't be located in master sites table.
-Before running this, paste the output code from above and correct the 2nd instance of each site ID (after the ~).
+SiteID and data corrections:
+Run if matches not found for all site IDs found in master sites table (chunk above), or other data corrections needed.
+User manually corrects site IDs that couldn't be located in master sites table by pasting the output code from above and correct the 2nd instance of each site ID (after the ~).
 ######
 
-```{r}
+```{r echo=TRUE}
 RIBSdata.siteids.corr <- RIBSdata %>% 
   mutate(SiteID = case_when(
     SiteID == '15-OCSDSTP-001' ~ '15-OCSDSTP-001',
@@ -215,6 +245,16 @@ RIBSdata.siteids.corr <- RIBSdata %>%
     )
 )
 
+### Enter other data corrections here:
+
+# There were several 'fraction' values for aluminum that should have been D for dissolved and not T.
+RIBSdata.siteids.corr <- RIBSdata.siteids.corr %>%
+  mutate(fraction = case_when(
+    chemical_name == 'Aluminum' & fraction == 'T' ~ 'D',
+    TRUE ~ fraction
+  )
+)
+
 # Check again for mismatches and print
 siteids.present.corr <- unique(RIBSdata.siteids.corr$SiteID[!is.na(RIBSdata.siteids.corr$SiteID)])
 siteids.mismatch2 <- siteids.present.corr[!(siteids.present.corr %in% sites.master$BAS_LOC_RM)]
@@ -222,10 +262,22 @@ siteids.match2 <- siteids.present.corr[(siteids.present.corr %in% sites.master$B
 cat(siteids.mismatch2,sep="\n")
 ```
 
+Write dataset to CSV.
 ```{r}
 
-write.table(RIBSdata.siteids.corr, file= file.path(root.dir, "data_output", "2018_Ramapo_chem_2-12-19.csv"),sep=",", row.names = FALSE)
+# Manualy copy to L:\DOW\SMAS\StreamDatabase\Chemistry\raw_merge-bind\[year]\. Automate this after L drive is reorganized.
+
+if(exists("RIBSdata.siteids.corr")){
+  write.table(RIBSdata.siteids.corr, file= paste0(output.path,"/",output.filename),sep=",", row.names = FALSE)
+} else {
+  write.table(RIBSdata, file= paste0(output.path,"/",output.filename),sep=",", row.names = FALSE)
+}
+
 # write.table(RIBSdata.sample, file= file.path(root.dir, "data_output", "2018_Ramapo_SAMPLE_merge-bind_2-12-19.csv"),sep=",", row.names = FALSE)
+
+### Add step to append this data to a raw archive of ALS data? (And keep track of which projects have been run) ###
+  # Use L:\DOW\SMAS\StreamDatabase\Chemistry\raw_merge-bind\[year]\
+
 
 ```
 
