@@ -1,0 +1,10 @@
+2/19/19
+
+Replaced all occurrences of
+07-KEUK-0.3-08012018-WS-DUP
+with
+07-KEUK-0.3-08012018-WSDUP
+in sample and result files.
+Necessary to appropriately match dups to parents in Chem_raw_processing script.
+
+Last sample in sample file was duplicate (different name) so it was removed.

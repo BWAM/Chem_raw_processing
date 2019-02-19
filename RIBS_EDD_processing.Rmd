@@ -18,9 +18,11 @@ root.dir <- rprojroot::find_root("Chem_raw_processing.Rproj")
 
 ##### User-defined variables #####
 
-input.path <- file.path(root.dir, "data_input", "2018", "Ramapo")
-output.path <- file.path(root.dir, "data_output", "2018", "Ramapo")
-output.filename <- "2018_Ramapo_chem_raw_2-15-19.csv"
+# DO NOT RUN FULL SCRIPT. MUST RUN CHUNK-BY-CHUNK AND CORRECT SITE IDs AND DATA WHERE NEEDED #
+input.path <- file.path(root.dir, "data_input", "2018", "FingerLakes")
+output.path <- file.path(root.dir, "data_output", "2018", "FingerLakes")
+output.filename <- "2018_FingerLakes_chem_raw_2-19-19.csv"
+# DO NOT RUN FULL SCRIPT. MUST RUN CHUNK-BY-CHUNK AND CORRECT SITE IDs AND DATA WHERE NEEDED #
 
 ##################################
 
@@ -59,13 +61,10 @@ for (i in 1:nfolder_list){
                                   "critical_value","validation_level","result_comment","qc_original_conc","qc_spike_added",
                                   "qc_spike_measured","qc_spike_recovery","qc_dup_original_conc","qc_dup_spike_added",
                                   "qc_dup_spike_measured","qc_dup_spike_recovery","qc_rpd","qc_spike_lcl","qc_spike_ucl","qc_rpd_cl",
-                                  "qc_spike_status","qc_dup_spike_status","qc_rpd_status","lab_sdg")
+                                  "qc_spike_status","qc_dup_spike_status","qc_rpd_status","lab_sdg"),
+                    colClasses = c(fraction="character")
                     )
  
-  ### ABOVE BRINGS IN FACTOR AS LOGICAL. Below converts all "T"s to "TRUE"s. May want to specify all column classes instead.  ###
-  temp_result$fraction <- as.character(temp_result$fraction)
-  temp_result$fraction <- plyr::revalue(temp_result$fraction, c("TRUE" = "T"), warn_missing = FALSE)
-   
   temp_sample <- read.table(file.path(input.i,"Sample_v3.txt"),
                             sep=",",fill=TRUE,header=FALSE, stringsAsFactors=FALSE,
                     col.names = c("#data_provider","sys_sample_code","sample_name","sample_matrix_code","sample_type_code",
@@ -94,7 +93,7 @@ for (i in 1:nfolder_list){
       
   
 ### ACCOUNT FOR UPPER AND LOWER CASE in below (see QAQC.Rmd) ###
-
+### ACCOUNT FOR DUPs labeled as "QC"... doesn't the new QAPP say to use this??
   
   
   dup.vec <- temp_sample$sample_name[temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N" 
@@ -133,7 +132,7 @@ for (i in 1:nfolder_list){
 ### Move this check to after binding data, see how many DUPS, DUP parents, EBs (MSs?) exist. Need to subset data and look at DEC_sample_type.
   # Okay if single SDGs don't have certain QAQC samples, but give warning if full set is missing any (and give total count).
     if(dup.count == 0 | dupparent.count == 0){
-    warning("    WARNING: NO DUPLICATES PRESENT\n")
+    warning(paste0("    WARNING: NO DUPLICATES PRESENT in ",folder_list[i],"\n"))
   }
   
   
@@ -180,6 +179,10 @@ for (i in 1:nfolder_list){
 RIBSdata = do.call(rbind, RSfile_list)
 # RIBSdata.sample = do.call(rbind, RSfile_list.sample)
 
+###
+### Add check here for summarizing QAQC samples (inluding total sample count) for user to compare to COCs (to make sure all assigned appropriately).
+###
+
 ```
 
 See if matches for generated site IDs exist in master sites table. If mismatches are found, process into code for copy/pasting into next chunk for correcting. 2nd instance of each site ID (after the ~) to be corrected manually after pasting next chunk.
@@ -219,41 +222,24 @@ Run if matches not found for all site IDs found in master sites table (chunk abo
 User manually corrects site IDs that couldn't be located in master sites table by pasting the output code from above and correct the 2nd instance of each site ID (after the ~).
 ######
 
-```{r echo=TRUE}
+```{r correct_data,echo=TRUE}
 RIBSdata.siteids.corr <- RIBSdata %>% 
   mutate(SiteID = case_when(
-    SiteID == '15-OCSDSTP-001' ~ '15-OCSDSTP-001',
-    SiteID == '15-RAMA-KJSTP' ~ '15-KJSTP-001',
-    SiteID == '15-RAMA-T25_3' ~ '15-RAMA_T25_3-0.2',
-    SiteID == '15-KJSTP-001' ~ '15-KJSTP-001',
-    SiteID == '15-RAMA_T25-0.2' ~ '15-RAMA_T25_3-0.2',
-    SiteID == '15-KFSTP-001' ~ '15-KJSTP-001',
-    SiteID == '15KJSTP-001-08222018' ~ '15-KJSTP-001',
-    SiteID == '5-OCSDSTP-001' ~ '15-OCSDSTP-001',
-    SiteID == '5-RAMA-1.1' ~ '15-RAMA-1.1',
-    SiteID == '5-RAMA-11.8' ~ '15-RAMA-11.8',
-    SiteID == '5-RAMA-13.3' ~ '15-RAMA-13.3',
-    SiteID == '5-RAMA-16.1' ~ '15-RAMA-16.1',
-    SiteID == '5-RAMA-16.5' ~ '15-RAMA-16.5',
-    SiteID == '5-RAMA-16.7' ~ '15-RAMA-16.7',
-    SiteID == '5-RAMA-4.8' ~ '15-RAMA-4.8',
-    SiteID == '5-KJSTP-001' ~ '15-KJSTP-001',
-    SiteID == '5-RAMA-16.8' ~ '15-RAMA-16.8',
-    SiteID == '5-RAMA-18.6' ~ '15-RAMA-18.6',
-    SiteID == '5-RAMA_T25_3-0.2' ~ '15-RAMA_T25_3-0.2',
+    SiteID == '07-ONID-XX' ~ '07-ONID-4.0',
     TRUE ~ SiteID
     )
 )
 
 ### Enter other data corrections here:
 
-# There were several 'fraction' values for aluminum that should have been D for dissolved and not T.
-RIBSdata.siteids.corr <- RIBSdata.siteids.corr %>%
-  mutate(fraction = case_when(
-    chemical_name == 'Aluminum' & fraction == 'T' ~ 'D',
-    TRUE ~ fraction
-  )
-)
+# (KEEP THIS CODE COMMENTED HERE AS AN EXAMPLE)
+# Ramapo: There were several 'fraction' values for aluminum that should have been D for dissolved and not T.
+# RIBSdata.siteids.corr <- RIBSdata.siteids.corr %>%
+#   mutate(fraction = case_when(
+#     chemical_name == 'Aluminum' & fraction == 'T' ~ 'D',
+#     TRUE ~ fraction
+#   )
+# )
 
 # Check again for mismatches and print
 siteids.present.corr <- unique(RIBSdata.siteids.corr$SiteID[!is.na(RIBSdata.siteids.corr$SiteID)])
@@ -262,7 +248,7 @@ siteids.match2 <- siteids.present.corr[(siteids.present.corr %in% sites.master$B
 cat(siteids.mismatch2,sep="\n")
 ```
 
-Write dataset to CSV.
+Write dataset to CSV. (Remember to knit and copy HTML report to output dir)
 ```{r}
 
 # Manualy copy to L:\DOW\SMAS\StreamDatabase\Chemistry\raw_merge-bind\[year]\. Automate this after L drive is reorganized.
