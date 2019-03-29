@@ -19,9 +19,16 @@ root.dir <- rprojroot::find_root("Chem_raw_processing.Rproj")
 ##### User-defined variables #####
 
 # DO NOT RUN FULL SCRIPT. MUST RUN CHUNK-BY-CHUNK AND CORRECT SITE IDs AND DATA WHERE NEEDED #
+
+# Must create the directories specified in input.path and output.path #
 input.path <- file.path(root.dir, "data_input", "2018", "Wallkill")
 output.path <- file.path(root.dir, "data_output", "2018", "Wallkill")
-output.filename <- "2018_Wallkill_chem_raw_3-26-19.csv"
+output.filename <- "2018_Wallkill_chem_raw_3-29-19.csv"
+
+#Specify sites reference table
+sites.master <- read.csv("data_input/Sites_2017-2018_Charlie.csv")
+# sites.master <- read.csv("data_input/Sites_2018-12-17_Di.csv")
+
 # DO NOT RUN FULL SCRIPT. MUST RUN CHUNK-BY-CHUNK AND CORRECT SITE IDs AND DATA WHERE NEEDED #
 
 ##################################
@@ -29,21 +36,23 @@ output.filename <- "2018_Wallkill_chem_raw_3-26-19.csv"
 ```
 
 Main process: 
-1) Loads in EDD components from each folder contained in the target directory. 
-2) Adds SiteID and DEC_sample_type fields to each Sample_v3.
-3) Merges TestResultQC_v3 and Sample_v3 files together for each EDD set.
+1) Load in EDD components from each folder contained in the target directory. 
+2) Add SiteID and DEC_sample_type fields to each Sample_v3.
+3) Merge TestResultQC_v3 and Sample_v3 files together for each EDD set.
 ```{r}
 
-# folder_list <- list.files(path = file.path(root.dir, "data_input", "2018", "Ramapo"))
+# Initialize loop objects and variables 
 folder_list <- list.files(path = input.path)
 nfolder_list = length(folder_list)
 RSfile_list <- list()
 RSfile_list.sample <- list()
-
 i=1
+
+message(paste0(nfolder_list, " EDDs present:\n"))
+
+# Loop through each file (folder) present in folder_list
 for (i in 1:nfolder_list){
   print(folder_list[i])
-  # input.i <- file.path(root.dir, "data_input", "2018", "Ramapo", folder_list[i])
   input.i <- paste0(input.path, "/", folder_list[i])
   output.i <- file.path(root.dir, "data_output")
   
@@ -74,31 +83,55 @@ for (i in 1:nfolder_list){
                                   "collection_quarter","composite_yn","composite_desc","sample_class","custom_field_1","custom_field_2",
                                   "custom_field_3","comment"))
 
-  ### Creating new fields: SiteID and DEC_sample_type ###
-  
+ 
   # Generate site IDs for field data by pulling info from sample_name before 3rd "-".
   temp_sample$SiteID <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N", 
                                sub("^(([^-]*-){2}[^-]*).*","\\1" , temp_sample$sample_name), NA)
-  # Generate DEC_sample_type column and and populate with EB code as needed.
+  
+  ##### Locate and code QAQC samples #####
+    ### Add other variants of QAQC sample codes? ###
+    ### Recode below to use lists of matches instead of repasting each block ###
+    ### Better to just pull last three characters of sample ID and look for these? Need to avoids finding these in site names... ###
+
+  # Generate DEC_sample_type field and and populate with EB code as needed. Other records are filled with NA when creating field (first line). 
+    #Must use specific variants for EB including matrix code because of 13-EBCR-16.3
   temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N" &
-                                          grepl("EB",temp_sample$sample_name),"EB", NA)
+                                          grepl("W-EB",temp_sample$sample_name),"EB", NA)
+  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N" &
+                                          grepl("WS-EB",temp_sample$sample_name),"EB",temp_sample$DEC_sample_type)
+  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N" &
+                                          grepl(" EB",temp_sample$sample_name),"EB",temp_sample$DEC_sample_type)
+
+  # Populate DEC_sample_type for FB samples as needed.
+  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N" &
+                                          grepl("W-FB",temp_sample$sample_name),"FB",temp_sample$DEC_sample_type)
+  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N" &
+                                          grepl("WS-FB",temp_sample$sample_name),"FB",temp_sample$DEC_sample_type)  
+  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N" &
+                                          grepl(" FB",temp_sample$sample_name),"FB",temp_sample$DEC_sample_type)
+  
   # Populate DEC_sample_type for duplicate samples as needed.
+      # Accounts for different DUP variants ("-DUP"", " DUP", "WSDUP", "WDUP", and upper/lowercase instances)
   temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N" &
-                                          grepl("[Dd][Uu][Pp]",temp_sample$sample_name),"DUP",temp_sample$DEC_sample_type)
+                                          grepl("-[Dd][Uu][Pp]",temp_sample$sample_name),"DUP",temp_sample$DEC_sample_type)
+  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N" &
+                                          grepl(" [Dd][Uu][Pp]",temp_sample$sample_name),"DUP",temp_sample$DEC_sample_type)
+  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N" &
+                                          grepl("WS[Dd][Uu][Pp]",temp_sample$sample_name),"DUP",temp_sample$DEC_sample_type)
+  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N" &
+                                          grepl("W[Dd][Uu][Pp]",temp_sample$sample_name),"DUP",temp_sample$DEC_sample_type)
+  
 
-    
-  # Populate DEC_sample_type for N_DUPPARENT cells by locating DUP samples and finding parent sample. 
-      # Accounts for different DUP variants (" DUP"", "-DUP", "WSDUP", "WDUP", and upper/lowercase instances)
-
+  # Populate DEC_sample_type for N_DUPPARENT cells by locating DUP samples and finding parent sample by removing DUP code. 
   dup.vec <- temp_sample$sample_name[temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N" 
-                                     & grepl(" [Dd][Uu][Pp]", temp_sample$sample_name)]
-  parent.vec <- gsub(" [Dd][Uu][Pp]", "", dup.vec)
+                                     & grepl("-[Dd][Uu][Pp]", temp_sample$sample_name)]
+  parent.vec <- gsub("-[Dd][Uu][Pp]", "", dup.vec)
   temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N" 
                                          & temp_sample$sample_name %in% parent.vec,"N_DUPPARENT",temp_sample$DEC_sample_type)
   
   dup.vec <- temp_sample$sample_name[temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N"
-                                     & grepl("-[Dd][Uu][Pp]", temp_sample$sample_name)]
-  parent.vec <- gsub("-[Dd][Uu][Pp]", "", dup.vec)
+                                     & grepl(" [Dd][Uu][Pp]", temp_sample$sample_name)]
+  parent.vec <- gsub(" [Dd][Uu][Pp]", "", dup.vec)
   temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N" 
                                          & temp_sample$sample_name %in% parent.vec,"N_DUPPARENT",temp_sample$DEC_sample_type)
   
@@ -114,8 +147,7 @@ for (i in 1:nfolder_list){
   temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N"
                                          & temp_sample$sample_name %in% parent.vec,"N_DUPPARENT",temp_sample$DEC_sample_type)
   
-  
-  # Count number of each sample type and print
+  # Count number of each sample type identified and print
   count.Normal <- length(grep("^N$", temp_sample$DEC_sample_type))
   message(paste0(count.Normal," N"))
   count.DUP <- length(grep("^DUP$", temp_sample$DEC_sample_type))
@@ -125,23 +157,27 @@ for (i in 1:nfolder_list){
   count.EB <- length(grep("^EB$", temp_sample$DEC_sample_type))
   message(paste0(count.EB," EB"))
   count.FB <- length(grep("^FB$", temp_sample$DEC_sample_type))     # FB only present in Routine Network data
-  message(paste0(count.FB," FB"))
-  count.MS <- length(grep("^MS$", temp_sample$sample_type_code))  
-  message(paste0(count.MS," MS (including lab MSs)\n"))
+  message(paste0(count.FB," FB\n"))
+  # count.MS <- length(grep("^MS$", temp_sample$sample_type_code))  
+  # message(paste0(count.MS," MS (including lab MSs)\n"))
   
-    # Ensure equal number of DUP and N_DUPPARENT codes assigned
+  # Check if equal number of DUP and N_DUPPARENT codes assigned. Stop script if not.
   if(identical(count.DUP,count.N_DUPPARENT) == FALSE){
     stop("    DUP and N_DUPPARENT counts do not match (script stopped)")
   }
 
-  # Populate remaining DEC_sample_type cells for field data with "N" for normal samples.
+  # Populate remaining DEC_sample_type NAs for field data with "N" for normal samples (assumes all remaining NAs are normal samples).
   temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N" &
                                           is.na(temp_sample$DEC_sample_type),"N",temp_sample$DEC_sample_type)
 
-  # Convert all NAs in temp_sample$DEC_sample_type to avoid subsetting issues in QAQC script (found that bracket subsetting in a column that contains NAs returns NA rows)
-  temp_sample$DEC_sample_type[is.na(temp_sample$DEC_sample_type)] <- "Lab"
+  # Convert Lab NAs to "Lab" (better than keeping as NAs to avoid subsetting issues in QAQC script; found that bracket subsetting in a column that contains NAs returns blank/NA rows).
+  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "Lab" & 
+                                          is.na(temp_sample$DEC_sample_type), "Lab", temp_sample$DEC_sample_type)
+ 
   
-  # Must merge by sys_sample_code and not sample_name in order to appropriately associate MS, dissolved samples (sometimes "Diss" or "S" added to end of sys_sample_code), and other lab samples with appropriate results.
+  ##### Merge sample and result files #####
+    # Must merge by sys_sample_code and not sample_name in order to appropriately associate MS, dissolved samples (sometimes "Diss" or "S" added to end of sys_sample_code), and other lab samples with appropriate results.
+  
   temp_RSmerge <- merge(temp_result,temp_sample,by="sys_sample_code", all=TRUE)
 
   filenm <- file.path(output.i,
@@ -158,7 +194,7 @@ for (i in 1:nfolder_list){
   mergenm <- paste0(folder_list[i], "_RSmerge")
   mergefile <- assign(mergenm, temp_RSmerge)
   
-  # Do the same for only sample file data (used for counting sample totals)
+  # Do the same for sample file data (used for assessing samples present and counting sample totals)
   mergenm.sample <- paste0(folder_list[i], "_Samplemerge")
   mergefile.sample <- assign(mergenm, temp_sample)
 
@@ -166,13 +202,19 @@ for (i in 1:nfolder_list){
   RSfile_list[[i]] <- mergefile
   RSfile_list.sample[[i]] <- mergefile.sample
 
-  # Export each merged EDD as CSVs (optional)
+  # Export each merged EDD as CSVs (use for troubleshooting)
   # write.table(temp_RSmerge, file=filenm,sep=",", row.names = FALSE)
 }
 
 #Bind all data frames (merged sample-result files) into one
 RIBSdata = do.call(rbind, RSfile_list)
 RIBSdata.sample = do.call(rbind, RSfile_list.sample)
+
+# List unqique sampling dates to verify all present
+sample.dates <- unique(as.Date(RIBSdata.sample$sample_date[RIBSdata.sample$sample_source == "Field"], "%m/%d/%Y %H:%M:%S"))
+message(paste0(length(sample.dates)," unique sample dates present (check manually against field data):\n"))
+cat(as.character(sort(sample.dates)), sep = "\n")
+
 
 ### Summarize sample counts to compare to COCs (ensure sure all codes assigned appropriately).
 totalcount.Normal <- length(grep("^N$", RIBSdata.sample$DEC_sample_type))
@@ -182,34 +224,39 @@ totalcount.EB <- length(grep("^EB$", RIBSdata.sample$DEC_sample_type))
 totalcount.FB <- length(grep("^FB$", RIBSdata.sample$DEC_sample_type))     # FB only present in Routine Network data
 totalcount.MS <- length(grep("^MS$", RIBSdata.sample$sample_type_code))  
 
-message(paste0("Total sample counts:\n", totalcount.Normal, " N\n",totalcount.DUP, " DUP\n", totalcount.N_DUPPARENT, " N_DUPPARENT\n", totalcount.EB, " EB\n", totalcount.FB, " FB\n", totalcount.MS, " MS (including lab MSs)\n"))
+message(paste0("\nTotal QAQC samples identified:\n", totalcount.Normal, " N\n",totalcount.DUP, " DUP\n", totalcount.N_DUPPARENT, " N_DUPPARENT\n", totalcount.EB, " EB\n", totalcount.FB, " FB (should only be present for Routine)\n" 
+               # ,totalcount.MS, " MS (including lab MSs)\n"
+               ))
 
-if(totalcount.DUP == 0){warning(paste0("    WARNING: NO DUPLICATES PRESENT"))}
-if(totalcount.N_DUPPARENT == 0){warning(paste0("    WARNING: NO DUP PARENTS PRESENT"))}
-if(totalcount.EB == 0){warning(paste0("    WARNING: NO EBs PRESENT"))}
-if(totalcount.FB == 0){warning(paste0("    WARNING: NO FBs PRESENT (only required for Routine Network data)"))}
-if(totalcount.MS == 0){warning(paste0("    WARNING: NO MSs PRESENT"))}
- 
+if(totalcount.DUP == 0){warning(paste0("    WARNING: NO DUPLICATES PRESENT\n"))}
+if(totalcount.N_DUPPARENT == 0){warning(paste0("    WARNING: NO DUP PARENTS PRESENT\n"))}
+if(totalcount.EB == 0){warning(paste0("    WARNING: NO EBs PRESENT\n"))}
+if(totalcount.FB == 0){warning(paste0("    WARNING: NO FBs PRESENT (only required for Routine data)\n"))}
+if(totalcount.FB > 0){warning(paste0("    WARNING: FBs PRESENT (only should be present for Routine data)\n"))}
+if(totalcount.MS == 0){warning(paste0("    WARNING: NO MSs PRESENT\n"))}
+
+# Check for ALS reanalyses (could mean duplicate results for one sample/param combination)
+reanalyses <- RIBSdata$sys_sample_code[(endsWith(RIBSdata$sys_sample_code,"RE"))]
+if(length(reanalyses) > 0){
+  message("\nWARNING: Reanalyses present (possible duplicate results for one sample/param combination): \n",reanalyses)
+} else{
+  message("pass")
+}
 ```
 
 See if matches for generated site IDs exist in master sites table. If mismatches are found, process into code for copy/pasting into next chunk for correcting. 2nd instance of each site ID (after the ~) to be corrected manually after pasting next chunk.
 ```{r}
-sites.master <- read.csv("data_input/Sites_2017-2018_Charlie.csv")
-# sites.master <- read.csv("data_input/Sites_2018-12-17_Di.csv")
-
-#Create BAS_LOC_RM field
-#Format fields to add leading, and keep trailing zeros.
+#Format fields to add leading, and keep trailing zeros before creating BAS_LOC_RM (site ID) field.
 sites.master$BASIN <- formatC(sites.master$BASIN, width = 2, format = "d", flag = "0")
 #Issue with sites that use "001" as rivermile. 001 will read into R as "1" and will therefore be reformatted to "1.0".
 sites.master$RIVMILE <- formatC( sites.master$RIVMILE, format='f', digits=1 )
 
-#Create BAS_LOC_RM field
-
+#Create BAS_LOC_RM field in reference table
 sites.master$BAS_LOC_RM <- ifelse(!is.na(sites.master$BASIN) & !is.na(sites.master$LOCATION) & !is.na(sites.master$RIVMILE),
        paste0(sites.master$BASIN,"-",sites.master$LOCATION,"-",sites.master$RIVMILE),NA)
 
+# List unique site IDs generated and creat match/mismatch lists
 siteids.present <- unique(RIBSdata$SiteID[!is.na(RIBSdata$SiteID)])
-
 siteids.mismatch <- siteids.present[!(siteids.present %in% sites.master$BAS_LOC_RM)]
 siteids.match <- siteids.present[(siteids.present %in% sites.master$BAS_LOC_RM)]
 
@@ -217,23 +264,22 @@ siteids.match <- siteids.present[(siteids.present %in% sites.master$BAS_LOC_RM)]
 if (length(siteids.mismatch) == 0 & length(siteids.match) > 0) {
   message("Match found for all ", length(siteids.match), " site IDs.")
 } else{
-  message(length(siteids.match), " sites matched, ", length(siteids.mismatch), " NOT matched:\n")
+  message(length(siteids.present)," unique site IDs generated from sample IDs\n",length(siteids.match), " matches found, ", length(siteids.mismatch), " mismatch(es):\n")
   siteids.mismatch.code <- paste0("    SiteID == '",siteids.mismatch,"' ~ '",siteids.mismatch,"',")
   cat(siteids.mismatch.code,sep="\n")
 }
 
+# Use RIBSdata.sample (sample list only) to help troubleshoot site ID mismatch issues.
+
 ```
 
-######
 SiteID and data corrections:
-Run if matches not found for all site IDs found in master sites table (chunk above), or other data corrections needed.
+### Run this chunk only if site ID mismatches found and need to be corrected, or other data corrections needed. ###
 User manually corrects site IDs that couldn't be located in master sites table by pasting the output code from above and correct the 2nd instance of each site ID (after the ~).
-######
-
 ```{r correct_data,echo=TRUE}
 RIBSdata.siteids.corr <- RIBSdata %>% 
   mutate(SiteID = case_when(
-    SiteID == '07-ONID-XX' ~ '07-ONID-4.0',
+    SiteID == '13-GUNK-T35' ~ '13-GUNK_T35-0.2',
     TRUE ~ SiteID
     )
 )
@@ -253,7 +299,13 @@ RIBSdata.siteids.corr <- RIBSdata %>%
 siteids.present.corr <- unique(RIBSdata.siteids.corr$SiteID[!is.na(RIBSdata.siteids.corr$SiteID)])
 siteids.mismatch2 <- siteids.present.corr[!(siteids.present.corr %in% sites.master$BAS_LOC_RM)]
 siteids.match2 <- siteids.present.corr[(siteids.present.corr %in% sites.master$BAS_LOC_RM)]
-cat(siteids.mismatch2,sep="\n")
+
+if(length(siteids.mismatch2 > 0)){
+  message("The following sites were still not matched:")
+  cat(siteids.mismatch2,sep="\n")
+} else{
+  message("All sites matched!")
+}
 ```
 
 Write dataset to CSV. (Remember to knit and copy HTML report to output dir)
