@@ -98,6 +98,9 @@ img {
 button.code-folding-btn:focus {
   outline: none;
 }
+summary {
+  display: list-item;
+}
 </style>
 
 
@@ -105,14 +108,74 @@ button.code-folding-btn:focus {
 <div class="container-fluid main-container">
 
 <!-- tabsets -->
+
+<style type="text/css">
+.tabset-dropdown > .nav-tabs {
+  display: inline-table;
+  max-height: 500px;
+  min-height: 44px;
+  overflow-y: auto;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.tabset-dropdown > .nav-tabs > li.active:before {
+  content: "";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li.active:before {
+  content: "";
+  border: none;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open:before {
+  content: "";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs > li.active {
+  display: block;
+}
+
+.tabset-dropdown > .nav-tabs > li > a,
+.tabset-dropdown > .nav-tabs > li > a:focus,
+.tabset-dropdown > .nav-tabs > li > a:hover {
+  border: none;
+  display: inline-block;
+  border-radius: 4px;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li {
+  display: block;
+  float: none;
+}
+
+.tabset-dropdown > .nav-tabs > li {
+  display: none;
+}
+</style>
+
 <script>
 $(document).ready(function () {
   window.buildTabsets("TOC");
 });
+
+$(document).ready(function () {
+  $('.tabset-dropdown > .nav-tabs > li').click(function () {
+    $(this).parent().toggleClass('nav-tabs-open')
+  });
+});
 </script>
 
 <!-- code folding -->
-
 
 
 
@@ -140,18 +203,50 @@ $(document).ready(function () {
 <pre><code>## The following objects are masked from 'package:base':
 ## 
 ##     intersect, setdiff, setequal, union</code></pre>
-<p>Main process: 1) Loads in EDD components from each folder contained in the target directory. 2) Adds SiteID and DEC_sample_type fields to each Sample_v3. 3) Merges TestResultQC_v3 and Sample_v3 files together for each EDD set.</p>
-<pre><code>## [1] &quot;R1807213_DUPfixed&quot;
-## [1] &quot;R1807362&quot;</code></pre>
-<pre><code>## Warning:     WARNING: NO DUPLICATES PRESENT in R1807362</code></pre>
+<p>Main process: 1) Load in EDD components from each folder contained in the target directory. 2) Add SiteID and DEC_sample_type fields to each Sample_v3. 3) Merge TestResultQC_v3 and Sample_v3 files together for each EDD set.</p>
+<pre><code>## 1 EDDs present:</code></pre>
+<pre><code>## [1] &quot;R1708149&quot;</code></pre>
+<pre><code>## 0 N</code></pre>
+<pre><code>## 1 DUP</code></pre>
+<pre><code>## 1 N_DUPPARENT</code></pre>
+<pre><code>## 1 EB</code></pre>
+<pre><code>## 0 FB</code></pre>
+<pre><code>## 1 unique sample dates present (check manually against field data):</code></pre>
+<pre><code>## 2017-08-30</code></pre>
+<pre><code>## 
+## Total samples identified:
+## 7 N
+## 1 N_DUPPARENT
+## 1 DUP
+## 1 EB
+## 0 FB (should only be present for Routine)</code></pre>
+<pre><code>## Warning:     WARNING: NO FBs PRESENT (only required for Routine data)</code></pre>
 <p>See if matches for generated site IDs exist in master sites table. If mismatches are found, process into code for copy/pasting into next chunk for correcting. 2nd instance of each site ID (after the ~) to be corrected manually after pasting next chunk.</p>
-<pre><code>##     SiteID == '07-ONID-XX' ~ '07-ONID-XX',</code></pre>
-<div id="section" class="section level6">
-<h6></h6>
-<p>SiteID and data corrections: Run if matches not found for all site IDs found in master sites table (chunk above), or other data corrections needed. User manually corrects site IDs that couldn’t be located in master sites table by pasting the output code from above and correct the 2nd instance of each site ID (after the ~). ######</p>
+<pre><code>## 10 unique site IDs generated from sample IDs
+## 0 matches found, 10 mismatch(es):</code></pre>
+<pre><code>##     SiteID == '13CLDS-1.3_08302017_WS' ~ '13CLDS-1.3_08302017_WS',
+##     SiteID == '13LWAP-3.5_08302017_WS' ~ '13LWAP-3.5_08302017_WS',
+##     SiteID == '13WAPP-10.7_08302017_WS' ~ '13WAPP-10.7_08302017_WS',
+##     SiteID == '13WAPP-15.9_08302017_WS' ~ '13WAPP-15.9_08302017_WS',
+##     SiteID == '13WAPP-21.8 DUP_08302017_WS' ~ '13WAPP-21.8 DUP_08302017_WS',
+##     SiteID == '13WAPP-21.8_08302017_WS' ~ '13WAPP-21.8_08302017_WS',
+##     SiteID == '13WAPP-29.2 EB_08302017_WS' ~ '13WAPP-29.2 EB_08302017_WS',
+##     SiteID == '13WAPP-29.2_08302017_WS' ~ '13WAPP-29.2_08302017_WS',
+##     SiteID == '13WAPP-5.0_08302017_WS' ~ '13WAPP-5.0_08302017_WS',
+##     SiteID == '13WAPP-E-0.1_08302017_WS' ~ '13WAPP-E-0.1_08302017_WS',</code></pre>
+<p>SiteID and data corrections: ### Run this chunk only if site ID mismatches found and need to be corrected, or other data corrections needed. ### User manually corrects site IDs that couldn’t be located in master sites table by pasting the output code from above and correct the 2nd instance of each site ID (after the ~).</p>
 <pre class="r"><code>RIBSdata.siteids.corr &lt;- RIBSdata %&gt;% 
   mutate(SiteID = case_when(
-    SiteID == '07-ONID-XX' ~ '07-ONID-4.0',
+    SiteID == '13CLDS-1.3_08302017_WS' ~ '13-CLDS-1.3',
+    SiteID == '13LWAP-3.5_08302017_WS' ~ '13-LWAP-3.5',
+    SiteID == '13WAPP-10.7_08302017_WS' ~ '13-WAPP-10.7',
+    SiteID == '13WAPP-15.9_08302017_WS' ~ '13-WAPP-15.9',
+    SiteID == '13WAPP-21.8 DUP_08302017_WS' ~ '13-WAPP-21.8',
+    SiteID == '13WAPP-21.8_08302017_WS' ~ '13-WAPP-21.8',
+    SiteID == '13WAPP-29.2 EB_08302017_WS' ~ '13-WAPP-29.2',
+    SiteID == '13WAPP-29.2_08302017_WS' ~ '13-WAPP-29.2',
+    SiteID == '13WAPP-5.0_08302017_WS' ~ '13-WAPP-5.0',
+    SiteID == '13WAPP-E-0.1_08302017_WS' ~ '13-WAPP_E-0.1',
     TRUE ~ SiteID
     )
 )
@@ -171,9 +266,16 @@ $(document).ready(function () {
 siteids.present.corr &lt;- unique(RIBSdata.siteids.corr$SiteID[!is.na(RIBSdata.siteids.corr$SiteID)])
 siteids.mismatch2 &lt;- siteids.present.corr[!(siteids.present.corr %in% sites.master$BAS_LOC_RM)]
 siteids.match2 &lt;- siteids.present.corr[(siteids.present.corr %in% sites.master$BAS_LOC_RM)]
-cat(siteids.mismatch2,sep=&quot;\n&quot;)</code></pre>
-<p>Write dataset to CSV.</p>
-</div>
+
+if(length(siteids.mismatch2 &gt; 0)){
+  message(&quot;The following sites were still not matched:&quot;)
+  cat(siteids.mismatch2,sep=&quot;\n&quot;)
+} else{
+  message(&quot;All sites matched!&quot;)
+}</code></pre>
+<pre><code>## The following sites were still not matched:</code></pre>
+<pre><code>## 13-WAPP-29.2</code></pre>
+<p>Write dataset to CSV. (Remember to knit and copy HTML report to output dir)</p>
 </div>
 
 

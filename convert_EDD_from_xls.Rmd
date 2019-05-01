@@ -1,0 +1,54 @@
+---
+title: "convert_EDD_from_xls"
+author: "Gavin Lemley"
+date: "April 29, 2019"
+output: html_document
+---
+
+```{r}
+# library(dplyr)
+library(readxl)
+root.dir <- rprojroot::find_root("Chem_raw_processing.Rproj")
+
+# Must create the directories specified in input.path and output.path #
+input.path <- file.path(root.dir, "data_input", "convert_edds", "xls")
+output.path <- file.path(root.dir, "data_input", "convert_edds", "folders")
+
+```
+
+```{r}
+
+# Initialize loop objects and variables 
+file_list <- list.files(path = input.path)
+nfile_list = length(file_list)
+RSfile_list <- list()
+RSfile_list.sample <- list()
+i=1
+
+message(paste0(nfile_list, " files present:\n"))
+
+# Loop through each file (folder) present in file_list
+for (i in 1:nfile_list){
+  print(file_list[i])
+  sdg.num <- substr(file_list[i], 1, nchar(file_list[i])-4)
+  folder.path <- paste0(output.path,"/",sdg.num,"_conv")
+  dir.create(folder.path)
+  input.i <- paste0(input.path, "/", file_list[i])
+  # output.i <- file.path(root.dir, "data_output")
+
+  temp_sample <- read_xls(input.i, sheet = "Sample_v3", col_names = FALSE)
+  
+  ##### mutate date format, check if NAs and missing columns are an issue
+  
+  
+  temp_result <- read_xls(input.i, sheet = "TestResultQC_v3", col_names = FALSE)
+  temp_batch <- read_xls(input.i, sheet = "Batch_v3", col_names = FALSE)
+
+  write.table(temp_sample, file = paste0(folder.path,"/Sample_v3.txt"), col.names = FALSE, sep = ",", row.names = FALSE)
+  write.table(temp_result, file = paste0(folder.path,"/TestResultQC_v3.txt"), col.names = FALSE, sep = ",", row.names = FALSE)
+  write.table(temp_batch, file = paste0(folder.path,"/Batch_v3.txt"), col.names = FALSE, sep = ",", row.names = FALSE)
+  
+}
+
+```
+

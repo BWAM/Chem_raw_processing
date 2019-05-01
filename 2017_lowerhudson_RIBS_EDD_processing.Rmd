@@ -5,6 +5,12 @@ date: "January 11, 2019"
 output: html_document
 ---
 
+## R Markdown
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
 Load libraries, find the R-project root directory, and specify input/output files.
 ```{r}
 library(dplyr)
@@ -15,14 +21,13 @@ root.dir <- rprojroot::find_root("Chem_raw_processing.Rproj")
 # DO NOT RUN FULL SCRIPT. MUST RUN CHUNK-BY-CHUNK AND CORRECT SITE IDs AND DATA WHERE NEEDED #
 
 # Must create the directories specified in input.path and output.path #
-input.path <- file.path(root.dir, "data_input", "2018", "routine_all")
-output.path <- file.path(root.dir, "data_output", "2018", "routine_SiteIDS_only")
-output.filename <- "2018_routine_SiteIDs_ONLY_4-30-19.csv"
+input.path <- file.path(root.dir, "data_input", "2017", "lower_hudson")
+output.path <- file.path(root.dir, "data_output", "2017", "lower_hudson")
+output.filename <- "2017_lower_hudson_chem_raw_4-10-19.csv"
 
 #Specify sites reference table
-# sites.master <- read.csv(file.path(root.dir, "data_input/site_tables/Sites_2017-2018_Charlie.csv"))
-# sites.master <- read.csv(file.path(root.dir, "data_input/site_tables/Sites_2018-12-17_Di.csv"))
-sites.master <- read.csv(file.path(root.dir, "data_input/site_tables/RIBS_RoutineNetwork_siteIDs_2018.csv"))
+# sites.master <- read.csv("data_input/site_tables/Sites_2017-2018_Charlie.csv")
+sites.master <- read.csv("data_input/site_tables/Sites_2018-12-17_Di.csv")
 
 # DO NOT RUN FULL SCRIPT. MUST RUN CHUNK-BY-CHUNK AND CORRECT SITE IDs AND DATA WHERE NEEDED #
 
@@ -71,7 +76,7 @@ for (i in 1:nfolder_list){
  
   temp_sample <- read.table(file.path(input.i,"Sample_v3.txt"),
                             sep=",",fill=TRUE,header=FALSE, stringsAsFactors=FALSE,
-                    col.names = c("data_provider","sys_sample_code","sample_name","sample_matrix_code","sample_type_code",
+                    col.names = c("#data_provider","sys_sample_code","sample_name","sample_matrix_code","sample_type_code",
                                   "sample_source","parent_sample_code","sample_delivery_group","sample_date","sys_loc_code",
                                   "start_depth","end_depth","depth_unit","chain_of_custody","sent_to_lab_date","sample_receipt_date",
                                   "sampler","sampling_company_code","sampling_reason","sampling_technique","task_code",
@@ -79,16 +84,10 @@ for (i in 1:nfolder_list){
                                   "custom_field_3","comment"))
 
  
-  ## Generate site IDs for field data by pulling info from sample_name before 3rd "-".
-  # temp_sample$SiteID <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N", 
-  #                              sub("^(([^-]*-){2}[^-]*).*","\\1" , temp_sample$sample_name), NA)
-
-  # Alternative method to generating SiteID. Pulls string from position after decimal (as expected in river mile). WOrks better for older data:
+  # Generate site IDs for field data by pulling info from sample_name before 3rd "-".
   temp_sample$SiteID <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N", 
-                               substr(temp_sample$sample_name, 1, as.numeric(gregexpr(pattern ='\\.',temp_sample$sample_name)) + 1), NA)
-  #add code for if no decimal present? (some site IDs use -001 as rivermile)
+                               sub("^(([^-]*-){2}[^-]*).*","\\1" , temp_sample$sample_name), NA)
   
-    
   ##### Locate and code QAQC samples #####
     ### Add other variants of QAQC sample codes? ###
     ### Recode below to use lists of matches instead of repasting each block ###
@@ -221,9 +220,8 @@ RIBSdata = do.call(rbind, RSfile_list)
 RIBSdata.sample = do.call(rbind, RSfile_list.sample)
 
 # List unqique sampling dates to verify all present
-# sample.dates <- unique(as.Date(RIBSdata.sample$sample_date[RIBSdata.sample$sample_source == "Field"], "%m/%d/%Y %H:%M:%S"))
-sample.dates <- unique(as.Date(RIBSdata.sample$sample_date[RIBSdata.sample$sample_source == "Field"], "%Y-%m-%d %H:%M:%S"))
-message(paste0(length(sample.dates)," unique sample dates present:\n"))
+sample.dates <- unique(as.Date(RIBSdata.sample$sample_date[RIBSdata.sample$sample_source == "Field"], "%m/%d/%Y %H:%M:%S"))
+message(paste0(length(sample.dates)," unique sample dates present (check manually against field data):\n"))
 cat(as.character(sort(sample.dates)), sep = "\n")
 
 
@@ -262,13 +260,15 @@ See if matches for generated site IDs exist in master sites table. If mismatches
 # Use this space for edits to data if needed before matching site IDs
 
 # Add dash if third position is a character
-# ifelse(is.character(substring(RIBSdata$SiteID, 3, 3)),stringi::stri_sub(RIBSdata$SiteID, 3, 2) <- "-",RIBSdata$SiteID)
+ifelse(is.character(substring(RIBSdata$SiteID, 3, 3)),stringi::stri_sub(RIBSdata$SiteID, 3, 2) <- "-",RIBSdata$SiteID)
 # ifelse(is.character(substring(RIBSdata$SiteID, 3, 3)),gsub('^([a-z]{3})([a-z]+)$', '\\1-\\2', old), NA)
 
 # Return string before underscore
 # RIBSdata$SiteID <- gsub( "_.*$", "", RIBSdata$SiteID)
 
-# RIBSdata$SiteID <- substr(RIBSdata$SiteID, 1, as.numeric(gregexpr(pattern ='\\.',RIBSdata$SiteID)) + 1)
+RIBSdata$SiteID <- substr(RIBSdata$SiteID, 1, as.numeric(gregexpr(pattern ='\\.',RIBSdata$SiteID)) + 1)
+
+# RIBSdata$SiteID.dotpos <- gregexpr(pattern ='\\.',RIBSdata$SiteID) + 1
 
 ########################
 
@@ -279,8 +279,8 @@ sites.master$BASIN <- formatC(sites.master$BASIN, width = 2, format = "d", flag 
 sites.master$RIVMILE <- formatC( sites.master$RIVMILE, format='f', digits=1 )
 
 #Create BAS_LOC_RM field in reference table
-# sites.master$BAS_LOC_RM <- ifelse(!is.na(sites.master$BASIN) & !is.na(sites.master$LOCATION) & !is.na(sites.master$RIVMILE),
-#        paste0(sites.master$BASIN,"-",sites.master$LOCATION,"-",sites.master$RIVMILE),NA)
+sites.master$BAS_LOC_RM <- ifelse(!is.na(sites.master$BASIN) & !is.na(sites.master$LOCATION) & !is.na(sites.master$RIVMILE),
+       paste0(sites.master$BASIN,"-",sites.master$LOCATION,"-",sites.master$RIVMILE),NA)
 
 # List unique site IDs generated and creat match/mismatch lists
 siteids.present <- unique(RIBSdata$SiteID[!is.na(RIBSdata$SiteID)])
@@ -306,9 +306,24 @@ User manually corrects site IDs that couldn't be located in master sites table b
 ```{r correct_data,echo=TRUE}
 RIBSdata.siteids.corr <- RIBSdata %>% 
   mutate(SiteID = case_when(
-    SiteID == '06-TOUGH-32.8' ~ '06-TOGH-32.8',
-    SiteID == '11UHUD-42.5' ~ '11-UHUD-42.5',
-    SiteID == '' ~ '14-WDEL-16.2',
+    SiteID == '13-ROND-T6-1.9' ~ '13-ROND_T6-1.9',
+    SiteID == '13-WALK-T13-1.3' ~ '13-WALK_T13-1.3',
+    SiteID == '13-BASG_T17-2.4' ~ '13-BASG_T17-2.4',
+    SiteID == '13-GREE-2.5' ~ '13-GREE-2.5',
+    SiteID == '13- BEER_W-0.2' ~ '13-BEER_W-0.2',
+    SiteID == '13- BUSK-0.2' ~ '13-BUSK-0.2',
+    SiteID == '13- ESOP-28.7' ~ '13-ESOP-28.7',
+    SiteID == '13- ESOP-29.6' ~ '13-ESOP-29.6',
+    SiteID == '13- ROND-32.2' ~ '13-ROND-32.2',
+    SiteID == '13- TRAV-2.7' ~ '13-TRAV-2.7',
+    SiteID == '13- XSTK-0.9' ~ '13-XSTK-0.9',
+    SiteID == '13-HACK_E-1.5' ~ '13-HACK_E-1.5',
+    SiteID == '13-ECBR-16.3' ~ '13-ECBR-16.3',
+    SiteID == '13-SWEL-0.1' ~ '13-SWEL-0.1',
+    SiteID == '13-SWMP-6.8' ~ '13-SWMP-6.8',
+    SiteID == '13-WASS-1.2' ~ '13-WASS-1.2',
+    SiteID == '05-POST_T5-0.9' ~ '05-POST_T5-0.9',
+    SiteID == '05-TMLV-5.7' ~ '05-TMLV-5.7',
     TRUE ~ SiteID
     )
 )
@@ -337,7 +352,7 @@ if(length(siteids.mismatch2 > 0)){
 }
 ```
 
-Write dataset to CSV. (Remember to copy report or Rmd to output dir)
+Write dataset to CSV. (Remember to knit and copy HTML report to output dir)
 ```{r}
 
 # Manualy copy to L:\DOW\SMAS\StreamDatabase\Chemistry\raw_merge-bind\[year]\. Automate this after L drive is reorganized.
