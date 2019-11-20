@@ -5,6 +5,8 @@ date: "January 11, 2019"
 output: html_document
 ---
 
+### Directions: Copy "RIBS_EDD_processing_MASTER.Rmd" from root folder into project-specific folder in data_output and rename/modify as needed.
+
 Load libraries, find the R-project root directory, and specify input/output files.
 ```{r}
 library(dplyr)
@@ -17,7 +19,7 @@ root.dir <- rprojroot::find_root("Chem_raw_processing.Rproj")
 # Must create the directories specified in input.path and output.path #
 input.path <- file.path(root.dir, "data_input", "2018", "routine_all")
 output.path <- file.path(root.dir, "data_output", "2018", "routine_SiteIDS_only")
-output.filename <- "2018_routine_SiteIDs_ONLY_4-30-19.csv"
+output.filename <- "2018_routine_SiteIDs_ONLY_chem_raw_11-19-19_TEST.csv"
 
 #Specify sites reference table
 # sites.master <- read.csv(file.path(root.dir, "data_input/site_tables/Sites_2017-2018_Charlie.csv"))
@@ -79,14 +81,15 @@ for (i in 1:nfolder_list){
                                   "custom_field_3","comment"))
 
  
-  ## Generate site IDs for field data by pulling info from sample_name before 3rd "-".
-  # temp_sample$SiteID <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N", 
-  #                              sub("^(([^-]*-){2}[^-]*).*","\\1" , temp_sample$sample_name), NA)
+  ### Generate site IDs for field data by pulling info from sample_name before 3rd "-".
+  temp_sample$SiteID <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N",
+                               sub("^(([^-]*-){2}[^-]*).*","\\1" , temp_sample$sample_name), NA)
 
-  # Alternative method to generating SiteID. Pulls string from position after decimal (as expected in river mile). WOrks better for older data:
-  temp_sample$SiteID <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N", 
-                               substr(temp_sample$sample_name, 1, as.numeric(gregexpr(pattern ='\\.',temp_sample$sample_name)) + 1), NA)
-  #add code for if no decimal present? (some site IDs use -001 as rivermile)
+  ## Alternative method to generating SiteID. Pulls string from position after decimal (as expected in river mile). WOrks better for older data:
+  ## BUT DOES NOT WORK IF NO DECIMAL PRESENT (some site IDs use -001 as rivermile)
+
+    # temp_sample$SiteID <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N", 
+    #                            substr(temp_sample$sample_name, 1, as.numeric(gregexpr(pattern ='\\.',temp_sample$sample_name)) + 1), NA)
   
     
   ##### Locate and code QAQC samples #####
@@ -188,7 +191,7 @@ for (i in 1:nfolder_list){
   ##### Merge sample and result files #####
     # Must merge by sys_sample_code and not sample_name in order to appropriately associate MS, dissolved samples (sometimes "Diss" or "S" added to end of sys_sample_code), and other lab samples with appropriate results.
   
-  temp_RSmerge <- merge(temp_result,temp_sample,by="sys_sample_code", all=TRUE)
+  temp_RSmerge <- merge(temp_sample,temp_result,by="sys_sample_code", all=TRUE)
 
   filenm <- file.path(output.i,
                       paste(folder_list[i],"_RSmerge.csv", sep=""))
@@ -206,12 +209,13 @@ for (i in 1:nfolder_list){
   
   # Do the same for sample file data (used for assessing samples present and counting sample totals)
   mergenm.sample <- paste0(folder_list[i], "_Samplemerge")
-  mergefile.sample <- assign(mergenm, temp_sample)
+  mergefile.sample <- assign(mergenm.sample, temp_sample)
 
   #Add current data frame to the list of all dataframes
   RSfile_list[[i]] <- mergefile
   RSfile_list.sample[[i]] <- mergefile.sample
-
+  rm(mergefile, mergefile.sample)
+  
   # Export each merged EDD as CSVs (use for troubleshooting)
   # write.table(temp_RSmerge, file=filenm,sep=",", row.names = FALSE)
 }
@@ -221,8 +225,8 @@ RIBSdata = do.call(rbind, RSfile_list)
 RIBSdata.sample = do.call(rbind, RSfile_list.sample)
 
 # List unqique sampling dates to verify all present
-# sample.dates <- unique(as.Date(RIBSdata.sample$sample_date[RIBSdata.sample$sample_source == "Field"], "%m/%d/%Y %H:%M:%S"))
-sample.dates <- unique(as.Date(RIBSdata.sample$sample_date[RIBSdata.sample$sample_source == "Field"], "%Y-%m-%d %H:%M:%S"))
+sample.dates <- unique(as.Date(RIBSdata.sample$sample_date[RIBSdata.sample$sample_source == "Field"], "%m/%d/%Y %H:%M:%S"))
+# sample.dates <- unique(as.Date(RIBSdata.sample$sample_date[RIBSdata.sample$sample_source == "Field"], "%Y-%m-%d %H:%M:%S"))
 message(paste0(length(sample.dates)," unique sample dates present:\n"))
 cat(as.character(sort(sample.dates)), sep = "\n")
 
@@ -296,7 +300,8 @@ if (length(siteids.mismatch) == 0 & length(siteids.match) > 0) {
   cat(siteids.mismatch.code,sep="\n")
 }
 
-
+message("\n\nUnique site ID's present in sys_loc_code field (as transcribed by ALS)")
+sort(unique(RIBSdata.sample$sys_loc_code))
 
 ```
 
