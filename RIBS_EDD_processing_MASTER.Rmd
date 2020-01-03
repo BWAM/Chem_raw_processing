@@ -17,14 +17,16 @@ root.dir <- rprojroot::find_root("Chem_raw_processing.Rproj")
 # DO NOT RUN FULL SCRIPT. MUST RUN CHUNK-BY-CHUNK AND CORRECT SITE IDs AND DATA WHERE NEEDED #
 
 # Must create the directories specified in input.path and output.path #
-input.path <- file.path(root.dir, "data_input", "2018", "routine_all")
-output.path <- file.path(root.dir, "data_output", "2018", "routine_SiteIDS_only")
-output.filename <- "2018_routine_SiteIDs_ONLY_chem_raw_11-19-19_TEST.csv"
+input.path <- file.path(root.dir, "data_input", "2019", "wallkill")
+output.path <- file.path(root.dir, "data_output", "2019", "wallkill")
+output.filename <- "2019_Wallkill_chem_preqaqc_2019-12-17.csv"
 
 #Specify sites reference table
 # sites.master <- read.csv(file.path(root.dir, "data_input/site_tables/Sites_2017-2018_Charlie.csv"))
 # sites.master <- read.csv(file.path(root.dir, "data_input/site_tables/Sites_2018-12-17_Di.csv"))
-sites.master <- read.csv(file.path(root.dir, "data_input/site_tables/RIBS_RoutineNetwork_siteIDs_2018.csv"))
+# sites.master <- read.csv(file.path(root.dir, "data_input/site_tables/RIBS_RoutineNetwork_siteIDs_2018.csv"))
+sites.master <- read.csv(file.path(root.dir, "data_input/site_tables/20191204_Site_Field.csv"))
+
 
 # DO NOT RUN FULL SCRIPT. MUST RUN CHUNK-BY-CHUNK AND CORRECT SITE IDs AND DATA WHERE NEEDED #
 
@@ -52,7 +54,11 @@ for (i in 1:nfolder_list){
   print(folder_list[i])
   input.i <- paste0(input.path, "/", folder_list[i])
   output.i <- file.path(root.dir, "data_output")
-  
+
+  # rename revised EDD filenames if they exist
+  file.rename(file.path(input.i,"TestResultQC_v3 REV.txt"), file.path(input.i,"TestResultQC_v3.txt"))
+  file.rename(file.path(input.i,"Sample_v3 REV.txt"), file.path(input.i,"Sample_v3.txt"))
+    
   temp_result <- read.table(file.path(input.i,"TestResultQC_v3.txt"),
                                       sep=",",fill=TRUE,header=FALSE,stringsAsFactors=FALSE,
                     col.names = c("sys_sample_code","lab_anl_method_name","analysis_date","fraction","column_number",
@@ -224,6 +230,12 @@ for (i in 1:nfolder_list){
 RIBSdata = do.call(rbind, RSfile_list)
 RIBSdata.sample = do.call(rbind, RSfile_list.sample)
 
+# Move new Site ID and DEC Sample Type columns to beginning of data frame
+RIBSdata <- RIBSdata %>% 
+  select(SiteID, DEC_sample_type, everything())
+RIBSdata.sample <- RIBSdata.sample %>% 
+  select(SiteID, DEC_sample_type, everything())
+
 # List unqique sampling dates to verify all present
 sample.dates <- unique(as.Date(RIBSdata.sample$sample_date[RIBSdata.sample$sample_source == "Field"], "%m/%d/%Y %H:%M:%S"))
 # sample.dates <- unique(as.Date(RIBSdata.sample$sample_date[RIBSdata.sample$sample_source == "Field"], "%Y-%m-%d %H:%M:%S"))
@@ -335,7 +347,7 @@ siteids.mismatch2 <- siteids.present.corr[!(siteids.present.corr %in% sites.mast
 siteids.match2 <- siteids.present.corr[(siteids.present.corr %in% sites.master$BAS_LOC_RM)]
 
 if(length(siteids.mismatch2 > 0)){
-  message("The following sites were still not matched:")
+  message("The following ", length(siteids.mismatch2), " sites were still not matched:")
   cat(siteids.mismatch2,sep="\n")
 } else{
   message("All sites matched!")
