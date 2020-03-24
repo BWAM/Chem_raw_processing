@@ -25,7 +25,7 @@ output.filename <- "2017_tabseptest_2020-01-28_TEST.csv"
 # sites.master <- read.csv(file.path(root.dir, "data_input/site_tables/Sites_2017-2018_Charlie.csv"))
 # sites.master <- read.csv(file.path(root.dir, "data_input/site_tables/Sites_2018-12-17_Di.csv"))
 # sites.master <- read.csv(file.path(root.dir, "data_input/site_tables/RIBS_RoutineNetwork_siteIDs_2018.csv"))
-sites.master <- read.csv(file.path(root.dir, "data_input/site_tables/20191204_Site_Field.csv"))
+sites.master <- read.csv(file.path(root.dir, "data_input/site_tables/20191224_Site_Field_cleaned_final.csv"))
 
 
 # DO NOT RUN FULL SCRIPT. MUST RUN CHUNK-BY-CHUNK AND CORRECT SITE IDs AND DATA WHERE NEEDED #
@@ -87,15 +87,24 @@ for (i in 1:nfolder_list){
                                   "custom_field_3","comment"))
 
  
+
+  
+  ##########  Generating site IDs  ##########  
+  
   ### Generate site IDs for field data by pulling info from sample_name before 3rd "-".
-  temp_sample$SiteID <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N",
+  temp_sample$SiteID <- ifelse(temp_sample$sample_source == "field" & temp_sample$sample_type_code == "N",
                                sub("^(([^-]*-){2}[^-]*).*","\\1" , temp_sample$sample_name), NA)
 
-  ## Alternative method to generating SiteID. Pulls string from position after decimal (as expected in river mile). WOrks better for older data:
-  ## BUT DOES NOT WORK IF NO DECIMAL PRESENT (some site IDs use -001 as rivermile)
-
-    # temp_sample$SiteID <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N", 
+  ## Alternative method #2 to generating SiteID. Pulls string from before first underscore
+    # temp_sample$SiteID <- ifelse(temp_sample$sample_source == "field" & temp_sample$sample_type_code == "N",
+    #                            str_extract(temp_sample$sample_name, "[^_]+"), NA)
+    
+  ## Alternative method #3 to generating SiteID. Pulls string from position after decimal (as expected in river mile). WOrks better for older data:
+        ## DOES NOT WORK IF NO DECIMAL PRESENT (some site IDs use -001 as rivermile)
+    # temp_sample$SiteID <- ifelse(temp_sample$sample_source == "field" & temp_sample$sample_type_code == "N",
     #                            substr(temp_sample$sample_name, 1, as.numeric(gregexpr(pattern ='\\.',temp_sample$sample_name)) + 1), NA)
+  
+  ###########################################
   
     
   ##### Locate and code QAQC samples #####
@@ -312,8 +321,8 @@ if (length(siteids.mismatch) == 0 & length(siteids.match) > 0) {
   cat(siteids.mismatch.code,sep="\n")
 }
 
-message("\n\nUnique site ID's present in sys_loc_code field (as transcribed by ALS)")
-sort(unique(RIBSdata.sample$sys_loc_code))
+# message("\n\nUnique site ID's present in sys_loc_code field (as transcribed by ALS)")
+# sort(unique(RIBSdata.sample$sys_loc_code))
 
 ```
 
@@ -373,3 +382,10 @@ if(exists("RIBSdata.siteids.corr")){
 
 ```
 
+Create data frame of unique chem params for creating chem_parameter table (p-codes)
+```{r}
+chem_params <- unique(RIBSdata[c("fraction", "cas_rn", "chemical_name")])
+
+write.table(chem_params, file= paste0(output.path,"/","chem_params.csv"),sep=",", row.names = FALSE)
+
+```
