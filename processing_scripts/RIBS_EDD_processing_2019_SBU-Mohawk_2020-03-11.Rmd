@@ -89,7 +89,9 @@ for (i in 1:nfolder_list){
   temp_batch <- read.table(text = gsub("\t",",", readLines(file.path(input.i,"Batch_v3.txt"))),
                                       sep=",",fill=TRUE,header=FALSE,stringsAsFactors=FALSE,
                     col.names = c("sys_sample_code",	"lab_anl_method_name",	"analysis_date",	"fraction",	"column_number",	"test_type", 
-                                  "test_batch_type", "test_batch_id")) 
+                                  "test_batch_type", "test_batch_id"),
+                                   colClasses = c(fraction="character")
+                                    ) 
 
   
   ##########  Generating site IDs  ##########  
