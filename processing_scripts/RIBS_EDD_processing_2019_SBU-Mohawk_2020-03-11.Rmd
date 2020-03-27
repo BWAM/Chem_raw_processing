@@ -460,6 +460,22 @@ RIBSdata.sample_corr <- RIBSdata.sample %>%
 #   )
 # )
 
+
+# Fixing erroneous lab_qualifier "." (should be blank). Only present for "07-WEST-7.3-09102019-W" and "07-SGAR-2.5-09102019-W DUP" Nitrogen results. 
+RIBSdata.ALL_corr <- RIBSdata.ALL_corr %>%
+  mutate(lab_qualifiers = case_when(
+    lab_qualifiers == '.'  ~ '',
+    TRUE ~ lab_qualifiers
+  )
+)
+
+RIBSdata.result <- RIBSdata.result %>%
+  mutate(lab_qualifiers = case_when(
+    lab_qualifiers == '.'  ~ '',
+    TRUE ~ lab_qualifiers
+  )
+)
+
 # Check again for mismatches and print
 siteids.present.corr <- unique(RIBSdata.ALL_corr$SITE_ID[!is.na(RIBSdata.ALL_corr$SITE_ID)])
 siteids.mismatch2 <- siteids.present.corr[!(siteids.present.corr %in% sites.master$BAS_LOC_RM)]
@@ -473,40 +489,6 @@ if(length(siteids.mismatch2 > 0)){
 }
 ```
 
-Create additional fields, format fields appopriately
-# NEED TO MOVE THIS REFORMATTING TO A NEW SCRIPT, or do it after running QAQC, since that required fields to be formatted as-as. 
-```{r}
-
-# Modify full joined table as needed
-RIBSdata.ALL_corr_TEST <- RIBSdata.ALL_corr %>% 
-  rename_all(toupper) %>% 
-  mutate(EVENT_ID = paste0(SITE_ID,"_",as.Date(SAMPLE_DATE, format = "%m/%d/%Y"))) %>% 
-  select(EVENT_ID, everything())
-
-# Modify SAMPLE table as needed
-RIBSdata.sample_corr_TEST <- RIBSdata.sample_corr %>% 
-  rename_all(toupper) %>% 
-  mutate(EVENT_ID = ifelse(!is.na(SITE_ID), paste0(SITE_ID,"_",as.Date(SAMPLE_DATE, format = "%m/%d/%Y")), SITE_ID)) %>% 
-  select(EVENT_ID, everything()) %>% 
-  mutate(SAMPLE_DATE = as.POSIXct(SAMPLE_DATE, format = "%m/%d/%Y %H:%M:%S" )) %>% 
-  mutate(SAMPLE_RECEIPT_DATE = as.Date(SAMPLE_RECEIPT_DATE, format = "%m/%d/%Y"))
- 
-# Modify RESULT table as needed
-RIBSdata.result_TEST <- RIBSdata.result %>% 
-  rename_all(toupper) %>% 
-  mutate(PARAMETER_ID = NA)
-  # format dates, numbers, etc.
-
-# Modify BATCH table as needed
-RIBSdata.batch_TEST <- RIBSdata.batch %>% 
-  rename_all(toupper)
-  # format dates, etc.
-
-# Format all dates correctly, number fields, etc
-### STOP SCRIPT IF Hg EBs exist
-
-```
-
 Write final tables to CSV (Remember to copy report or Rmd to output dir)
 ```{r}
 # Export sample table
@@ -518,18 +500,17 @@ write.table(RIBSdata.result, file= paste0(output.path,"/",output.result.filename
 # Export batch table
 write.table(RIBSdata.batch, file= paste0(output.path,"/",output.batch.filename),sep=",", row.names = FALSE)
 
-# Export pre-joined table
+# Export pre-joined table (for running through QAQC script)
 write.table(RIBSdata.ALL_corr, file= paste0(output.path,"/",output.filename),sep=",", row.names = FALSE)
 
 
 ```
 
 
-Test filtering to redesign Site ID and sample type assignments
-```{r}
-RIBSdata.sample.WQ <- RIBSdata.sample_corr %>% 
-  filter(sample_matrix_code == "WQ")
-```
+
+### END PROCESS ###
+
+
 
 Test joining sample and result by sys_sample_code and SDG
 ```{r}
