@@ -13,16 +13,18 @@ root.dir <- rprojroot::find_root("Chem_raw_processing.Rproj")
 ##### User-defined variables #####
 
 # Must create the directories specified in input.path and output.path #
-input.path <- file.path(root.dir, "data_input", "2018", "all_SBU")
-output.path <- file.path(root.dir, "data_output", "2018", "all_SBU")
+input.path <- file.path(root.dir, "data_input", "2018", "all_SBU_routine")
+output.path <- file.path(root.dir, "data_output", "2018", "all_SBU_routine")
 
-output.filename <- paste0("2018_chem_preqaqc_ALL-SBU_complete_", Sys.Date(), ".csv")
-output.sample.filename <- paste0("2018_chem_preqaqc_SAMPLE-SBU_complete_", Sys.Date(), ".csv")
-output.result.filename <- paste0("2018_chem_preqaqc_RESULT-SBU_complete_", Sys.Date(), ".csv")
-output.batch.filename <- paste0("2018_chem_preqaqc_BATCH-SBU_complete_", Sys.Date(), ".csv")
+output.filename <- paste0("2018_chem_preqaqc_ALL_SMAS_complete_", Sys.Date(), ".csv")
+output.sample.filename <- paste0("2018_chem_preqaqc_SAMPLE-SMAS_complete_", Sys.Date(), ".csv")
+output.result.filename <- paste0("2018_chem_preqaqc_RESULT-SMAS_complete_", Sys.Date(), ".csv")
+output.batch.filename <- paste0("2018_chem_preqaqc_BATCH-SMAS_complete_", Sys.Date(), ".csv")
 
 #Specify sites reference table
-sites.master <- read.csv(file.path(root.dir, "data_input/site_tables/20191224_Site_Field_cleaned_final.csv"))
+# sites.master <- read.csv(file.path(root.dir, "data_input/site_tables/20191224_Site_Field_cleaned_final.csv"))
+sites.master <- readxl::read_excel(file.path(root.dir, "data_input/site_tables/2020_05_01_S_Site.xlsx")) %>% 
+  rename(BAS_LOC_RM = SITE_HISTORY_ID)
 
 ##################################
 
@@ -374,6 +376,12 @@ RIBSdata.ALL_corr <- RIBSdata.ALL %>%
     SITE_ID == '0-SABL_W_T14-0.2' ~ '10-SABL_W_T14-0.2',
     SITE_ID == '0-SABL_W_T14-0.3' ~ '10-SABL_W_T14-0.3',
     SITE_ID == '10-CHUB_5.0-11012018' ~ '10-CHUB-5.0',
+    
+    # Added when Routine EDDs were included for 5/8/20 update
+    SITE_ID == '06-TOUGH-32.8' ~ '06-TOGH-32.8',
+    SITE_ID == '11UHUD-42.5-08142018' ~ '11-UHUD-42.5',
+    SITE_ID == '14-WDEL-10162018' ~ '14-WDEL-16.2',
+    
     TRUE ~ SITE_ID
     )
   ) %>% 
@@ -428,6 +436,12 @@ RIBSdata.sample_corr <- RIBSdata.sample %>%
     SITE_ID == '0-SABL_W_T14-0.2' ~ '10-SABL_W_T14-0.2',
     SITE_ID == '0-SABL_W_T14-0.3' ~ '10-SABL_W_T14-0.3',
     SITE_ID == '10-CHUB_5.0-11012018' ~ '10-CHUB-5.0',
+    
+    # Added when Routine EDDs were included for 5/8/20 update
+    SITE_ID == '06-TOUGH-32.8' ~ '06-TOGH-32.8',
+    SITE_ID == '11UHUD-42.5-08142018' ~ '11-UHUD-42.5',
+    SITE_ID == '14-WDEL-10162018' ~ '14-WDEL-16.2',
+    
     TRUE ~ SITE_ID
     )
   ) %>% 
@@ -464,3 +478,47 @@ write.table(RIBSdata.batch, file= paste0(output.path,"/",output.batch.filename),
 write.table(RIBSdata.ALL_corr, file= paste0(output.path,"/",output.filename),sep=",", row.names = FALSE)
 
 ```
+
+
+
+
+### END MAIN PROCESS ###
+
+
+Test joining sample and result by sys_sample_code and SDG
+```{r}
+
+# Verify that joining just by sys_sample_code (SSC) does not work properly
+RIBSdata.sample_corr_test <- RIBSdata.sample_corr %>% 
+  rename(lab_sdg = sample_delivery_group)
+test_join_SSC <- left_join(RIBSdata.sample_corr, RIBSdata.result, by = c("sys_sample_code"))
+ # Result: creates doubles!
+
+# Join by both SSC and SDG
+ test_join_SSC_SDG <- left_join(RIBSdata.sample_corr_test, RIBSdata.result, by = c("sys_sample_code", "lab_sdg"))
+ # Result: does not create doubles :)
+
+
+```
+
+
+Prep before submitting to Zach for testing automated assessments
+```{r}
+#Subset data to remove lab and QC samples, select fields, and add blank fields to be filled later.
+SMAS_chem_2018_simple <- RIBSdata.ALL_corr %>%
+  filter(DEC_sample_type %in% c("N","N_DUPPARENT"),
+         sample_type_code %in% "N") %>% 
+  mutate(qaqc_date = "",
+         Project_name = "") %>% 
+    select('Project_name', 'SITE_ID','SITE_ID_CORR_IND','sys_sample_code','sample_delivery_group','chemical_name','sample_date','cas_rn','fraction','result_value','result_unit','method_detection_limit','detection_limit_unit','quantitation_limit','lab_qualifiers','validator_qualifiers','interpreted_qualifiers', 'qaqc_date')
+
+#Import similar 2019 data file, bind, and check for param consistency
+SMAS_chem_2019_simple <- read_csv(file.path(root.dir, "data_output", "2019", "all_SBU_Mohawk_Routine_complete", "SMAS_chem_2019_preqaqc_simple.csv"))
+
+SMAS_chem_2018.2019 <- bind_rows(SMAS_chem_2018_simple, SMAS_chem_2019_simple) %>% 
+  mutate(chemical_name = tolower(chemical_name))
+
+write_csv(SMAS_chem_2018.2019, paste0(output.path,"/SMAS_chem_2018_2019_preqaqc_simple.csv"))
+
+```
+

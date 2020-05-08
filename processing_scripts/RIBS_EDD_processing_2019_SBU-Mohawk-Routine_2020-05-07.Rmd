@@ -13,16 +13,19 @@ root.dir <- rprojroot::find_root("Chem_raw_processing.Rproj")
 ##### User-defined variables #####
 
 # Must create the directories specified in input.path and output.path #
-input.path <- file.path(root.dir, "data_input", "2018", "all_SBU")
-output.path <- file.path(root.dir, "data_output", "2018", "all_SBU")
+input.path <- file.path(root.dir, "data_input", "2019", "all_SBU_Mohawk_Routine_complete")
+output.path <- file.path(root.dir, "data_output", "2019", "all_SBU_Mohawk_Routine_complete")
 
-output.filename <- paste0("2018_chem_preqaqc_ALL-SBU_complete_", Sys.Date(), ".csv")
-output.sample.filename <- paste0("2018_chem_preqaqc_SAMPLE-SBU_complete_", Sys.Date(), ".csv")
-output.result.filename <- paste0("2018_chem_preqaqc_RESULT-SBU_complete_", Sys.Date(), ".csv")
-output.batch.filename <- paste0("2018_chem_preqaqc_BATCH-SBU_complete_", Sys.Date(), ".csv")
+output.filename <- paste0("2019_chem_preqaqc_ALL-SMAS_complete_", Sys.Date(), ".csv")
+output.sample.filename <- paste0("2019_chem_preqaqc_SAMPLE-SMAS_complete_", Sys.Date(), ".csv")
+output.result.filename <- paste0("2019_chem_preqaqc_RESULT-SMAS_complete_", Sys.Date(), ".csv")
+output.batch.filename <- paste0("2019_chem_preqaqc_BATCH-SMAS_complete_", Sys.Date(), ".csv")
 
 #Specify sites reference table
-sites.master <- read.csv(file.path(root.dir, "data_input/site_tables/20191224_Site_Field_cleaned_final.csv"))
+# sites.master <- read.csv(file.path(root.dir, "data_input/site_tables/20191224_Site_Field_cleaned_final.csv"))
+sites.master <- readxl::read_excel(file.path(root.dir, "data_input/site_tables/2020_05_01_S_Site.xlsx")) %>% 
+  rename(BAS_LOC_RM = SITE_HISTORY_ID)
+
 
 ##################################
 
@@ -92,13 +95,8 @@ for (i in 1:nfolder_list){
                                   "test_batch_type", "test_batch_id"),
                                    colClasses = c(fraction="character")
                                     ) 
-  
-  ##### Corrections needed before creating site IDs:
-    
-    # Correct matrix codes from WA to WS in R1804778 (lab data entry error)
-    temp_sample$sample_matrix_code <- ifelse(grepl("WA",temp_sample$sample_matrix_code),"WS",temp_sample$sample_matrix_code)  
-    temp_result$lab_matrix_code <- ifelse(grepl("WA",temp_result$lab_matrix_code),"WS",temp_result$lab_matrix_code)  
 
+  
   ##########  Generating site IDs  ##########  
   
   # Duplicate sample_name field and convert all spaces to dashes before pulling site IDs ###
@@ -123,7 +121,6 @@ for (i in 1:nfolder_list){
   # Set Site ID to LAB_INTERNAL for such samples
   temp_sample$SITE_ID <- ifelse(temp_sample$sample_matrix_code == "WQ", "LAB_INTERNAL", temp_sample$SITE_ID)
   
-  
   # Delete temp column
   temp_sample <- temp_sample %>% 
     select(-sample_name_temp)
@@ -135,12 +132,13 @@ for (i in 1:nfolder_list){
 
   # Populate DEC_sample_type for EB samples.
   temp_sample$DEC_sample_type <- ifelse(grepl("-EB",temp_sample$sample_name),"EB", NA)
-  temp_sample$DEC_sample_type <- ifelse(grepl("WS-EB",temp_sample$sample_name),"EB",temp_sample$DEC_sample_type)
+  # temp_sample$DEC_sample_type <- ifelse(grepl("WS-EB",temp_sample$sample_name),"EB",temp_sample$DEC_sample_type)
   temp_sample$DEC_sample_type <- ifelse(grepl(" EB",temp_sample$sample_name),"EB",temp_sample$DEC_sample_type)
   temp_sample$DEC_sample_type <- ifelse(grepl("EB_",temp_sample$sample_name),"EB",temp_sample$DEC_sample_type)
-  
-  # Several EBs in 2018 Wallkill and Finger Lakes tribs were labeled as FBs. Label these as EBs. (FBs were only used for mercury samples in this year.)
-  temp_sample$DEC_sample_type <- ifelse(grepl("-FB",temp_sample$sample_name),"FB",temp_sample$DEC_sample_type)  
+
+  # Populate DEC_sample_type for FB samples. (only used in Routine data, where mercury samples exist)
+  temp_sample$DEC_sample_type <- ifelse(grepl("-FB",temp_sample$sample_name),"FB",temp_sample$DEC_sample_type)
+  # temp_sample$DEC_sample_type <- ifelse(grepl("WS-FB",temp_sample$sample_name),"FB",temp_sample$DEC_sample_type)  
   temp_sample$DEC_sample_type <- ifelse(grepl(" FB",temp_sample$sample_name),"FB",temp_sample$DEC_sample_type)
   
   # Populate DEC_sample_type for duplicate samples.
@@ -150,7 +148,8 @@ for (i in 1:nfolder_list){
   temp_sample$DEC_sample_type <- ifelse(grepl("WS[Dd][Uu][Pp]",temp_sample$sample_name),"DUP",temp_sample$DEC_sample_type)
   temp_sample$DEC_sample_type <- ifelse(grepl("W[Dd][Uu][Pp]",temp_sample$sample_name),"DUP",temp_sample$DEC_sample_type)
   temp_sample$DEC_sample_type <- ifelse(grepl("[Dd][Uu][Pp]_",temp_sample$sample_name),"DUP",temp_sample$DEC_sample_type)
- 
+  
+  
   # Populate DEC_sample_type for N_DUPPARENT cells by locating DUP samples and finding parent sample by removing DUP code. 
   dup.vec <- temp_sample$sample_name[grepl("-[Dd][Uu][Pp]", temp_sample$sample_name)]
   parent.vec <- gsub("-[Dd][Uu][Pp]", "", dup.vec)
@@ -179,7 +178,6 @@ for (i in 1:nfolder_list){
   
   # Populate remaining DEC_sample_type NAs for field data with "N" for normal samples (assumes all remaining NAs are normal samples).
   temp_sample$DEC_sample_type <- ifelse(is.na(temp_sample$DEC_sample_type),"N",temp_sample$DEC_sample_type)
-
 
   # Count number of each FIELD sample type identified and print
   count.Normal <- length(temp_sample$DEC_sample_type[temp_sample$sample_source == "Field" & grepl("^N$", temp_sample$DEC_sample_type)])  
@@ -264,6 +262,7 @@ message(paste0(length(sample.dates)," unique sample dates present:\n"))
 cat(as.character(sort(sample.dates)), sep = "\n")
 
 
+
 ### Summarize sample counts to compare to COCs (ensure sure all codes assigned appropriately).
 # Rebuilt code code block below when expanded code assignments to lab samples
 
@@ -332,48 +331,56 @@ User manually corrects site IDs that couldn't be located in master sites table b
 ```{r correct_data,echo=TRUE}
 RIBSdata.ALL_corr <- RIBSdata.ALL %>% 
   mutate(SITE_ID_corr = case_when(
-    SITE_ID == '07-OW4-3.0' ~ '07-OWLI-3.0',
-    SITE_ID == '07-VENE-0.4' ~ '07-VENE-0.4',  # Not in sites table. Matched FL Hub field data.
-    SITE_ID == 'LAB_INTERNAL' ~ 'LAB_INTERNAL',
+    SITE_ID == '12-CANW-72.3' ~ '12-CANW-72.3',    #OK (need to add to sites table)
+    SITE_ID == '12-SCHO-36' ~ '12-SCHO-36.0',
+    SITE_ID == '07-MASH-0.1' ~ '07-CTLE-0.1',
     SITE_ID == '07-SCHR-0.1' ~ '07-SCKR-0.1',
-    SITE_ID == '07-SLKR-0.1' ~ '07-SCKR-0.1',
-    SITE_ID == '15-RAMA-KJSTP' ~ '15-KJSTP-001',
-    SITE_ID == '15-RAMA-T25_3' ~ '15-RAMA_T25_3-0.2',
-    SITE_ID == '13-GUNK-T35' ~ '13-GUNK_T35-0.2',
-    SITE_ID == '10-ALDE_T-0.6' ~ '10-ALDE_T15-0.6',
-    SITE_ID == '15-RAMA_T25-0.2' ~ '15-RAMA_T25_3-0.2',
-    SITE_ID == '15-KFSTP-001' ~ '15-KJSTP-001',
-    SITE_ID == '07-ONID-XX' ~ '07-ONID-4.0',     # Double check. Field data says RM 4.0. Why noted as XX on COC?
-    SITE_ID == '06-NING_T-1.2' ~ '06-NING_T4-1.2',
-    SITE_ID == '06-BTNT_T-1.0' ~ '06-BTNT_T6_1-1.0',
-    SITE_ID == '06-BTNT_T-12.0' ~ '06-BTNT-12.0',
-    SITE_ID == '06-DILA-06' ~ '06-DILA-5.4',
-    SITE_ID == '15KJSTP-001-08222018' ~ '15-KJSTP-001',
-    SITE_ID == '5-OCSDSTP-001' ~ '15-OCSDSTP-001',
-    SITE_ID == '5-RAMA-1.1' ~ '15-RAMA-1.1',
-    SITE_ID == '5-RAMA-11.8' ~ '15-RAMA-11.8',
-    SITE_ID == '5-RAMA-13.3' ~ '15-RAMA-13.3',
-    SITE_ID == '5-RAMA-16.1' ~ '15-RAMA-16.1',
-    SITE_ID == '5-RAMA-16.5' ~ '15-RAMA-16.5',
-    SITE_ID == '5-RAMA-16.7' ~ '15-RAMA-16.7',
-    SITE_ID == '5-RAMA-4.8' ~ '15-RAMA-4.8',
-    SITE_ID == '5-KJSTP-001' ~ '15-KJSTP-001',
-    SITE_ID == '5-RAMA-16.8' ~ '15-RAMA-16.8',
-    SITE_ID == '5-RAMA-18.6' ~ '15-RAMA-18.6',
-    SITE_ID == '5-RAMA_T25_3-0.2' ~ '15-RAMA_T25_3-0.2',
-    SITE_ID == '12-DUAN_T1-0.1' ~ '12-LDUAN_T1-0.1',
-    SITE_ID == '0-SABL_W-12.8' ~ '10-SABL_W-12.9',
-    SITE_ID == '0-SABL_W-15.1' ~ '10-SABL_W-15.1',
-    SITE_ID == '0-SABL_W-18.6' ~ '10-SABL_W-18.6',
-    SITE_ID == '0-SABL_W-20.7' ~ '10-SABL_W-20.7',
-    SITE_ID == '0-SABL_W_T26-0.1' ~ '10-SABL_W_T26-0.1',
-    SITE_ID == '0-SABL_W_T26-0.2' ~ '10-SABL_W_T26-0.2',
-    SITE_ID == '0-SABL_W-10.3' ~ '10-SABL_W-10.3',
-    SITE_ID == '0-SABL_W_T13-0.1' ~ '10-SABL_W_T13-0.1',
-    SITE_ID == '0-SABL_W_T13-0.2' ~ '10-SABL_W_T13-0.2',
-    SITE_ID == '0-SABL_W_T14-0.2' ~ '10-SABL_W_T14-0.2',
-    SITE_ID == '0-SABL_W_T14-0.3' ~ '10-SABL_W_T14-0.3',
-    SITE_ID == '10-CHUB_5.0-11012018' ~ '10-CHUB-5.0',
+    SITE_ID == '07-SKAT_T93a-0.1' ~ '07-SKAT_T93a-0.5', # Moved site upstream
+    SITE_ID == '07-VENE-0.3' ~ '07-VENE-1.5', # Moved site upstream
+    SITE_ID == '12-MOHK-24' ~ '12-MOHK-24.0',
+    SITE_ID == '04-GRIN-6.3' ~ '04-GRIM-6.3',
+    SITE_ID == '04-MUDG-T72' ~ '04-MUDG_T72-0.3',
+    SITE_ID == '04-SENP-T32' ~ '04-SENP_T32-0.6',
+    SITE_ID == '05-BWIN-T7' ~ '05-BWIN_T7_T2-0.4',
+    SITE_ID == '05-CATH_T9_3A-0.5' ~ '05-CATH_T9_3a-0.5',
+    SITE_ID == '05-SAMO-1.7' ~ '05-SAMO-1.7',  # Needs to be corrcected in sites table (is listed as basin 4 as of 3/25/20)
+    SITE_ID == '05-TNCR-3.7' ~ '04-TNCR-3.7',
+    SITE_ID == '04-BADN-8.7' ~ '04-BADN-8.7', # OK as per field data note
+    SITE_ID == '04-BEBE-1.5_07232019' ~ '04-BEBE-1.5',
+    SITE_ID == '12-UHUD-2.7' ~ '11-UHUD-2.7',
+    SITE_ID == '04-UGNS-132' ~ '04-UGNS-132.0',
+    SITE_ID == 'BETT-0.1-08012019' ~ '14-BETT-0.1',
+    SITE_ID == 'CALK-1.3-07312019' ~ '14-CALK-1.3',
+    SITE_ID == 'CALL_E_T13a-0.1-07312019' ~ '14-CALL_E_T13a-0.1',
+    SITE_ID == 'COLD-T7-1.1' ~ '14-COLD_T7-1.1',
+    SITE_ID == 'PATT-3.5-08012019' ~ '06-PATT-3.5',
+    SITE_ID == 'SPRB-0.5-07312019' ~ '14-SPRB-0.5',
+    SITE_ID == 'SUGC_T3-0.3-07312019' ~ '06-SUGC_T3-0.3',
+    SITE_ID == 'THRD-1.4-08012019' ~ '14-THRD-1.3', # ALS typo from COC
+    SITE_ID == 'TOWN-T12-0.2' ~ '14-TOWN_T12-0.2',
+    SITE_ID == 'TROW-3.9-07312019' ~ '06-TROW-3.9',
+    SITE_ID == 'WFLS_T14-0.1-07312019' ~ '06-WFLS_T14-0.1',
+    SITE_ID == '07-RSWP-0.1' ~ '07-BSWP-0.1',
+    SITE_ID == '14CALL_E-0.2-08212019' ~ '14-CALL_E-0.2',
+    SITE_ID == '14CALL_E-0.4-08212019' ~ '14-CALL_E-0.4',
+    SITE_ID == '14-MONG-M' ~ '14-MONG_M-5.6',
+    SITE_ID == '14-UNVR-0.2' ~ '14-UNVR_E-0.2',
+    SITE_ID == '14-UNVR-12.5' ~ '14-UNVR_W-12.5',
+    SITE_ID == '14-TOWN-T11' ~ '14-TOWN_T11-0.2',
+    SITE_ID == '14-WDEL-35.5' ~ '14-WDEL-35.4', # ALS typo from COC
+    SITE_ID == '14-BETT-0.2' ~ '14-BETT-0.1', # ALS typo from COC
+    SITE_ID == '14-WDEL-51' ~ '14-WDEL-51.0',
+    SITE_ID == '09-REG1-64.0' ~ '09-REGI-64.0',
+    SITE_ID == '09-ENGL-09162019' ~ '09-ENGL-2.5',
+    SITE_ID == '02-OTSQ-0.2' ~ '12-OTSQ-0.2',
+    SITE_ID == '12MOHK-13.4-07222019' ~ '12-MOHK-13.4',
+    SITE_ID == '12MOHK-14.5-07222019' ~ '12-MOHK-1.5', #Subcontracted lab typo
+    SITE_ID == '12MOHK-17.3-07222019' ~ '12-MOHK-17.3',
+    SITE_ID == '12MOHK-24-07222019' ~ '12-MOHK-24.0',
+    SITE_ID == '12UHUD-2.7-07222019' ~ '11-UHUD-2.7',  #Subcontracted lab typo
+    SITE_ID == '12-MOHK-13.5' ~ '12-MOHK-1.5', #Subcontracted lab typo (checked COC)
+    SITE_ID == 'TRIP-BLANK' ~ 'TRIP_BLANK',
+    SITE_ID == 'Trip-Blank' ~ 'TRIP_BLANK',
     TRUE ~ SITE_ID
     )
   ) %>% 
@@ -386,48 +393,56 @@ RIBSdata.ALL_corr <- RIBSdata.ALL %>%
 
 RIBSdata.sample_corr <- RIBSdata.sample %>% 
   mutate(SITE_ID_corr = case_when(
-    SITE_ID == '07-OW4-3.0' ~ '07-OWLI-3.0',
-    SITE_ID == '07-VENE-0.4' ~ '07-VENE-0.4',  # Not in sites table. Matched FL Hub field data.
-    SITE_ID == 'LAB_INTERNAL' ~ 'LAB_INTERNAL',
+    SITE_ID == '12-CANW-72.3' ~ '12-CANW-72.3',    #OK (need to add to sites table)
+    SITE_ID == '12-SCHO-36' ~ '12-SCHO-36.0',
+    SITE_ID == '07-MASH-0.1' ~ '07-CTLE-0.1',
     SITE_ID == '07-SCHR-0.1' ~ '07-SCKR-0.1',
-    SITE_ID == '07-SLKR-0.1' ~ '07-SCKR-0.1',
-    SITE_ID == '15-RAMA-KJSTP' ~ '15-KJSTP-001',
-    SITE_ID == '15-RAMA-T25_3' ~ '15-RAMA_T25_3-0.2',
-    SITE_ID == '13-GUNK-T35' ~ '13-GUNK_T35-0.2',
-    SITE_ID == '10-ALDE_T-0.6' ~ '10-ALDE_T15-0.6',
-    SITE_ID == '15-RAMA_T25-0.2' ~ '15-RAMA_T25_3-0.2',
-    SITE_ID == '15-KFSTP-001' ~ '15-KJSTP-001',
-    SITE_ID == '07-ONID-XX' ~ '07-ONID-4.0',     # Double check. Field data says RM 4.0. Why noted as XX on COC?
-    SITE_ID == '06-NING_T-1.2' ~ '06-NING_T4-1.2',
-    SITE_ID == '06-BTNT_T-1.0' ~ '06-BTNT_T6_1-1.0',
-    SITE_ID == '06-BTNT_T-12.0' ~ '06-BTNT-12.0',
-    SITE_ID == '06-DILA-06' ~ '06-DILA-5.4',
-    SITE_ID == '15KJSTP-001-08222018' ~ '15-KJSTP-001',
-    SITE_ID == '5-OCSDSTP-001' ~ '15-OCSDSTP-001',
-    SITE_ID == '5-RAMA-1.1' ~ '15-RAMA-1.1',
-    SITE_ID == '5-RAMA-11.8' ~ '15-RAMA-11.8',
-    SITE_ID == '5-RAMA-13.3' ~ '15-RAMA-13.3',
-    SITE_ID == '5-RAMA-16.1' ~ '15-RAMA-16.1',
-    SITE_ID == '5-RAMA-16.5' ~ '15-RAMA-16.5',
-    SITE_ID == '5-RAMA-16.7' ~ '15-RAMA-16.7',
-    SITE_ID == '5-RAMA-4.8' ~ '15-RAMA-4.8',
-    SITE_ID == '5-KJSTP-001' ~ '15-KJSTP-001',
-    SITE_ID == '5-RAMA-16.8' ~ '15-RAMA-16.8',
-    SITE_ID == '5-RAMA-18.6' ~ '15-RAMA-18.6',
-    SITE_ID == '5-RAMA_T25_3-0.2' ~ '15-RAMA_T25_3-0.2',
-    SITE_ID == '12-DUAN_T1-0.1' ~ '12-LDUAN_T1-0.1',
-    SITE_ID == '0-SABL_W-12.8' ~ '10-SABL_W-12.9',
-    SITE_ID == '0-SABL_W-15.1' ~ '10-SABL_W-15.1',
-    SITE_ID == '0-SABL_W-18.6' ~ '10-SABL_W-18.6',
-    SITE_ID == '0-SABL_W-20.7' ~ '10-SABL_W-20.7',
-    SITE_ID == '0-SABL_W_T26-0.1' ~ '10-SABL_W_T26-0.1',
-    SITE_ID == '0-SABL_W_T26-0.2' ~ '10-SABL_W_T26-0.2',
-    SITE_ID == '0-SABL_W-10.3' ~ '10-SABL_W-10.3',
-    SITE_ID == '0-SABL_W_T13-0.1' ~ '10-SABL_W_T13-0.1',
-    SITE_ID == '0-SABL_W_T13-0.2' ~ '10-SABL_W_T13-0.2',
-    SITE_ID == '0-SABL_W_T14-0.2' ~ '10-SABL_W_T14-0.2',
-    SITE_ID == '0-SABL_W_T14-0.3' ~ '10-SABL_W_T14-0.3',
-    SITE_ID == '10-CHUB_5.0-11012018' ~ '10-CHUB-5.0',
+    SITE_ID == '07-SKAT_T93a-0.1' ~ '07-SKAT_T93a-0.5', # Moved site upstream
+    SITE_ID == '07-VENE-0.3' ~ '07-VENE-1.5', # Moved site upstream
+    SITE_ID == '12-MOHK-24' ~ '12-MOHK-24.0',
+    SITE_ID == '04-GRIN-6.3' ~ '04-GRIM-6.3',
+    SITE_ID == '04-MUDG-T72' ~ '04-MUDG_T72-0.3',
+    SITE_ID == '04-SENP-T32' ~ '04-SENP_T32-0.6',
+    SITE_ID == '05-BWIN-T7' ~ '05-BWIN_T7_T2-0.4',
+    SITE_ID == '05-CATH_T9_3A-0.5' ~ '05-CATH_T9_3a-0.5',
+    SITE_ID == '05-SAMO-1.7' ~ '04-SAMO-1.7',
+    SITE_ID == '05-TNCR-3.7' ~ '04-TNCR-3.7',
+    SITE_ID == '04-BADN-8.7' ~ '04-BADN-8.7', # OK as per field data note
+    SITE_ID == '04-BEBE-1.5_07232019' ~ '04-BEBE-1.5',
+    SITE_ID == '12-UHUD-2.7' ~ '11-UHUD-2.7',
+    SITE_ID == '04-UGNS-132' ~ '04-UGNS-132.0',
+    SITE_ID == 'BETT-0.1-08012019' ~ '14-BETT-0.1',
+    SITE_ID == 'CALK-1.3-07312019' ~ '14-CALK-1.3',
+    SITE_ID == 'CALL_E_T13a-0.1-07312019' ~ '14-CALL_E_T13a-0.1',
+    SITE_ID == 'COLD-T7-1.1' ~ '14-COLD_T7-1.1',
+    SITE_ID == 'PATT-3.5-08012019' ~ '06-PATT-3.5',
+    SITE_ID == 'SPRB-0.5-07312019' ~ '14-SPRB-0.5',
+    SITE_ID == 'SUGC_T3-0.3-07312019' ~ '06-SUGC_T3-0.3',
+    SITE_ID == 'THRD-1.4-08012019' ~ '14-THRD-1.3', # ALS typo from COC
+    SITE_ID == 'TOWN-T12-0.2' ~ '14-TOWN_T12-0.2',
+    SITE_ID == 'TROW-3.9-07312019' ~ '06-TROW-3.9',
+    SITE_ID == 'WFLS_T14-0.1-07312019' ~ '06-WFLS_T14-0.1',
+    SITE_ID == '07-RSWP-0.1' ~ '07-BSWP-0.1',
+    SITE_ID == '14CALL_E-0.2-08212019' ~ '14-CALL_E-0.2',
+    SITE_ID == '14CALL_E-0.4-08212019' ~ '14-CALL_E-0.4',
+    SITE_ID == '14-MONG-M' ~ '14-MONG_M-5.6',
+    SITE_ID == '14-UNVR-0.2' ~ '14-UNVR_E-0.2',
+    SITE_ID == '14-UNVR-12.5' ~ '14-UNVR_W-12.5',
+    SITE_ID == '14-TOWN-T11' ~ '14-TOWN_T11-0.2',
+    SITE_ID == '14-WDEL-35.5' ~ '14-WDEL-35.4', # ALS typo from COC
+    SITE_ID == '14-BETT-0.2' ~ '14-BETT-0.1', # ALS typo from COC
+    SITE_ID == '14-WDEL-51' ~ '14-WDEL-51.0',
+    SITE_ID == '09-REG1-64.0' ~ '09-REGI-64.0',
+    SITE_ID == '09-ENGL-09162019' ~ '09-ENGL-2.5',
+    SITE_ID == '02-OTSQ-0.2' ~ '12-OTSQ-0.2',
+    SITE_ID == '12MOHK-13.4-07222019' ~ '12-MOHK-13.4',
+    SITE_ID == '12MOHK-14.5-07222019' ~ '12-MOHK-1.5', #Subcontracted lab typo
+    SITE_ID == '12MOHK-17.3-07222019' ~ '12-MOHK-17.3',
+    SITE_ID == '12MOHK-24-07222019' ~ '12-MOHK-24.0',
+    SITE_ID == '12UHUD-2.7-07222019' ~ '11-UHUD-2.7',  #Subcontracted lab typo
+    SITE_ID == '12-MOHK-13.5' ~ '12-MOHK-1.5', #Subcontracted lab typo (checked COC)
+    SITE_ID == 'TRIP-BLANK' ~ 'TRIP_BLANK',
+    SITE_ID == 'Trip-Blank' ~ 'TRIP_BLANK',
     TRUE ~ SITE_ID
     )
   ) %>% 
@@ -436,6 +451,34 @@ RIBSdata.sample_corr <- RIBSdata.sample %>%
   select(SITE_ID_corr, SITE_ID_CORR_IND, everything()) %>% 
   rename(SITE_ID = SITE_ID_corr)
   
+
+### Enter other data corrections here:
+
+# (KEEP THIS CODE COMMENTED HERE AS AN EXAMPLE)
+# Ramapo: There were several 'fraction' values for aluminum that should have been D for dissolved and not T.
+# RIBSdata.ALL_corr <- RIBSdata.ALL_corr %>%
+#   mutate(fraction = case_when(
+#     chemical_name == 'Aluminum' & fraction == 'T' ~ 'D',
+#     TRUE ~ fraction
+#   )
+# )
+
+
+# Fixing erroneous lab_qualifier "." (should be blank). Only present for "07-WEST-7.3-09102019-W" and "07-SGAR-2.5-09102019-W DUP" Nitrogen results. 
+RIBSdata.ALL_corr <- RIBSdata.ALL_corr %>%
+  mutate(lab_qualifiers = case_when(
+    lab_qualifiers == '.'  ~ '',
+    TRUE ~ lab_qualifiers
+  )
+)
+
+RIBSdata.result <- RIBSdata.result %>%
+  mutate(lab_qualifiers = case_when(
+    lab_qualifiers == '.'  ~ '',
+    TRUE ~ lab_qualifiers
+  )
+)
+
 # Check again for mismatches and print
 siteids.present.corr <- unique(RIBSdata.ALL_corr$SITE_ID[!is.na(RIBSdata.ALL_corr$SITE_ID)])
 siteids.mismatch2 <- siteids.present.corr[!(siteids.present.corr %in% sites.master$BAS_LOC_RM)]
@@ -449,8 +492,14 @@ if(length(siteids.mismatch2 > 0)){
 }
 ```
 
-Write final tables to CSV (Remember to copy report or Rmd to output dir)
+Additional edits and Write final tables to CSV (Remember to copy report or Rmd to output dir)
 ```{r}
+#Filter out selenium results (erroneously reported by lab)
+RIBSdata.result <- RIBSdata.result %>% 
+  filter(chemical_name != "Selenium")
+RIBSdata.ALL_corr <- RIBSdata.ALL_corr %>% 
+  filter(chemical_name != "Selenium")
+
 # Export sample table
 write.table(RIBSdata.sample_corr, file= paste0(output.path,"/",output.sample.filename),sep=",", row.names = FALSE)
 
@@ -460,7 +509,46 @@ write.table(RIBSdata.result, file= paste0(output.path,"/",output.result.filename
 # Export batch table
 write.table(RIBSdata.batch, file= paste0(output.path,"/",output.batch.filename),sep=",", row.names = FALSE)
 
-# Export pre-joined table
+# Export pre-joined table (for running through QAQC script)
 write.table(RIBSdata.ALL_corr, file= paste0(output.path,"/",output.filename),sep=",", row.names = FALSE)
 
+
 ```
+
+
+
+### END MAIN PROCESS ###
+
+Subset data for submitting to Zach for testing automated assessments
+```{r}
+SMAS_chem_2019_simple <- RIBSdata.ALL_corr %>%
+  filter(DEC_sample_type %in% c("N","N_DUPPARENT"),
+         sample_type_code %in% "N") %>% 
+  mutate(qaqc_date = "",
+         Project_name = "") %>% 
+    select('Project_name', 'SITE_ID','SITE_ID_CORR_IND','sys_sample_code','sample_delivery_group','chemical_name','sample_date','cas_rn','fraction','result_value','result_unit','method_detection_limit','detection_limit_unit','quantitation_limit','lab_qualifiers','validator_qualifiers','interpreted_qualifiers', 'qaqc_date')
+
+write_csv(SMAS_chem_2019_simple, paste0(output.path,"/SMAS_chem_2019_preqaqc_simple.csv"))
+
+
+```
+
+
+
+
+Test joining sample and result by sys_sample_code and SDG
+```{r}
+
+# Verify that joining just by sys_sample_code (SSC) does not work properly
+RIBSdata.sample_corr_test <- RIBSdata.sample_corr %>% 
+  rename(lab_sdg = sample_delivery_group)
+test_join_SSC <- left_join(RIBSdata.sample_corr, RIBSdata.result, by = c("sys_sample_code"))
+ # Result: creates doubles!
+
+# Join by both SSC and SDG
+ test_join_SSC_SDG <- left_join(RIBSdata.sample_corr_test, RIBSdata.result, by = c("sys_sample_code", "lab_sdg"))
+ # Result: does not create doubles :)
+
+
+```
+
