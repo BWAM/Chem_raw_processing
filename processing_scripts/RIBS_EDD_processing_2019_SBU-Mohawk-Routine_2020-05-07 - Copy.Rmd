@@ -543,12 +543,13 @@ Test joining sample and result by sys_sample_code and SDG
 RIBSdata.sample_corr_test <- RIBSdata.sample_corr %>% 
   rename(lab_sdg = sample_delivery_group)
 test_join_SSC <- left_join(RIBSdata.sample_corr, RIBSdata.result, by = c("sys_sample_code"))
- # Result: creates doubles!
+ # Result: creates duplicates!
 
 # Join by both SSC and SDG
  test_join_SSC_SDG <- left_join(RIBSdata.sample_corr_test, RIBSdata.result, by = c("sys_sample_code", "lab_sdg"))
  # Result: does not create doubles :)
 
+ ### THIS TEST DOES NOT PASS FOR 2019 ROUTINE PCB DATA ###
 
 ```
 
