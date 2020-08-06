@@ -33,106 +33,9 @@ Main process:
 3) Merge TestResultQC_v3 and Sample_v3 files together for each EDD set.
 
 ```{r}
-result_cols <- c(
-        "sys_sample_code",
-        "lab_anl_method_name",
-        "analysis_date",
-        "fraction",
-        "column_number",
-        "test_type",
-        "lab_matrix_code",
-        "analysis_location",
-        "basis",
-        "container_id",
-        "dilution_factor",
-        "prep_method",
-        "prep_date",
-        "leachate_method",
-        "leachate_date",
-        "lab_name_code",
-        "qc_level",
-        "lab_sample_id",
-        "percent_moisture",
-        "subsample_amount",
-        "subsample_amount_unit",
-        "analyst_name",
-        "instrument_id",
-        "comment",
-        "preservative",
-        "final_volume",
-        "final_volume_unit",
-        "cas_rn",
-        "chemical_name",
-        "result_value",
-        "result_error_delta",
-        "result_type_code",
-        "reportable_result",
-        "detect_flag",
-        "lab_qualifiers",
-        "validator_qualifiers",
-        "interpreted_qualifiers",
-        "validated_yn",
-        "method_detection_limit",
-        "reporting_detection_limit",
-        "quantitation_limit",
-        "result_unit",
-        "detection_limit_unit",
-        "tic_retention_time",
-        "minimum_detectable_conc",
-        "counting_error",
-        "uncertainty",
-        "critical_value",
-        "validation_level",
-        "result_comment",
-        "qc_original_conc",
-        "qc_spike_added",
-        "qc_spike_measured",
-        "qc_spike_recovery",
-        "qc_dup_original_conc",
-        "qc_dup_spike_added",
-        "qc_dup_spike_measured",
-        "qc_dup_spike_recovery",
-        "qc_rpd",
-        "qc_spike_lcl",
-        "qc_spike_ucl",
-        "qc_rpd_cl",
-        "qc_spike_status",
-        "qc_dup_spike_status",
-        "qc_rpd_status",
-        "lab_sdg"
-      )
-
-sample_cols <- c(
-        "data_provider",
-        "sys_sample_code",
-        "sample_name",
-        "sample_matrix_code",
-        "sample_type_code",
-        "sample_source",
-        "parent_sample_code",
-        "sample_delivery_group",
-        "sample_date",
-        "sys_loc_code",
-        "start_depth",
-        "end_depth",
-        "depth_unit",
-        "chain_of_custody",
-        "sent_to_lab_date",
-        "sample_receipt_date",
-        "sampler",
-        "sampling_company_code",
-        "sampling_reason",
-        "sampling_technique",
-        "task_code",
-        "collection_quarter",
-        "composite_yn",
-        "composite_desc",
-        "sample_class",
-        "custom_field_1",
-        "custom_field_2",
-        "custom_field_3",
-        "comment"
-      )
+# Load the standard column names.
+source(file.path("source",
+                 "column_names.R"))
 ```
 
 ```{r}
@@ -203,18 +106,6 @@ for (i in 1:nfolder_list) {
       NA
     )
   
-  ## Alternative method #2 to generating SiteID. Pulls string from before first underscore
-  # temp_sample$SiteID <- ifelse(temp_sample$sample_source == "field" & temp_sample$sample_type_code == "N",
-  #                            str_extract(temp_sample$sample_name, "[^_]+"), NA)
-  
-  ## Alternative method #3 to generating SiteID. Pulls string from position after decimal (as expected in river mile). WOrks better for older data:
-  ## DOES NOT WORK IF NO DECIMAL PRESENT (some site IDs use -001 as rivermile)
-  # temp_sample$SiteID <- ifelse(temp_sample$sample_source == "field" & temp_sample$sample_type_code == "N",
-  #                            substr(temp_sample$sample_name, 1, as.numeric(gregexpr(pattern ='\\.',temp_sample$sample_name)) + 1), NA)
-  
-  ###########################################
-  
-  
   ##### Locate and code QAQC samples #####
   ### Add other variants of QAQC sample codes? ###
   ### Recode below to use lists of matches instead of repasting each block ###
@@ -223,24 +114,21 @@ for (i in 1:nfolder_list) {
   # Generate DEC_sample_type field and and populate with EB code as needed. Other records are filled with NA when creating field (first line).
   #Must use specific variants for EB including matrix code because of 13-EBCR-16.3
   
-  temp_sample <- temp_sample %>% 
-    mutate(DEC_sample_type2 = case_when(
-      sample_source %in% "Field" &
-        sample_type_code %in% "N" &
-        grepl("W(S)?-EB| EB|EB_", sample_name) ~ "EB",
-      sample_source %in% "Field" &
-        sample_type_code %in% "N" &
-        grepl("W(S)?-FB| FB|FB_", sample_name) ~ "FB",
-      sample_source == "Field" &
-        sample_type_code == "N" &
-        grepl(
-          "-[Dd][Uu][Pp]|W[Dd][Uu][Pp]|WS[Dd][Uu][Pp]|[Dd][Uu][Pp]_| [Dd][Uu][Pp]",
-          sample_name
-        ) ~ "DUP",
-
-      
-      TRUE ~ NA_character_
-    ))
+  temp_sample <- temp_sample %>%
+    mutate(
+      DEC_sample_type2 = case_when(
+        sample_source %in% "Field" &
+          sample_type_code %in% "N" &
+          grepl("W(S)?-EB| EB|EB_", sample_name) ~ "EB",
+        sample_source %in% "Field" &
+          sample_type_code %in% "N" &
+          grepl("W(S)?-FB| FB|FB_", sample_name) ~ "FB",
+        sample_source == "Field" &
+          sample_type_code == "N" &
+          grepl("[-Ww ](S)?[Dd][Uu][Pp]|[Dd][Uu][Pp]_", sample_name) ~ "DUP",
+        TRUE ~ NA_character_
+      )
+    )
   
   temp_sample$DEC_sample_type <-
     ifelse(
