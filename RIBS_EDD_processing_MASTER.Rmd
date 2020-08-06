@@ -1,46 +1,96 @@
 ---
-title: "RIBS_EDD_processing"
-author: "Gavin Lemley"
-date: "January 11, 2019"
+title: "RIBS EDD Processing"
+author: "Gavin Lemley, Zachary M. Smith"
+date: "`r Sys.Date()`"
 output: html_document
 ---
 
-### Directions: 
+# Purpose
 
-Copy "RIBS_EDD_processing_MASTER.Rmd" from root folder into project-specific folder in data_output and rename/modify as needed.
-
-Load libraries, find the R-project root directory, and specify input/output files.
-```{r}
-library(dplyr)
-root.dir <- rprojroot::find_root("Chem_raw_processing.Rproj")
-##### User-defined variables #####
-
-# DO NOT RUN FULL SCRIPT. MUST RUN CHUNK-BY-CHUNK AND CORRECT SITE IDs AND DATA WHERE NEEDED #
-
-# Must create the directories specified in input.path and output.path #
-input.path <- file.path(root.dir, "data_input", "2020")
-output.path <- file.path(root.dir, "data_output", "2020", "TEST")
-output.filename <- paste0("20202_tabseptest_", Sys.Date(), "TEST.csv")
-
-#Specify sites reference table
-sites.master <- read.csv(file.path(root.dir, "data_input/site_tables/20191224_Site_Field_cleaned_final.csv"))
-# DO NOT RUN FULL SCRIPT. MUST RUN CHUNK-BY-CHUNK AND CORRECT SITE IDs AND DATA WHERE NEEDED #
-```
+Validate the SMAS chemistry data reported by ALS.
 
 Main process: 
 1) Load in EDD components from each folder contained in the target directory. 
 2) Add SiteID and DEC_sample_type fields to each Sample_v3.
 3) Merge TestResultQC_v3 and Sample_v3 files together for each EDD set.
 
+# Prepare the R Environment
+
+Load the necessary R packages.
+```{r}
+library(dplyr)
+library(purrr)
+```
+
+Establish the root directory and the data input and output directories.
+```{r}
+# Project directory
+root_dir <- rprojroot::find_root("Chem_raw_processing.Rproj")
+# Input directory
+input_path <- file.path(root_dir, "data_input", "2020")
+# Output directory
+output_path <- file.path(root_dir, "data_output", "2020", "TEST")
+
+output_filename <- paste0("20202_tabseptest_", Sys.Date(), "TEST.csv")
+```
+
+# Import Data
+
+Import the master list of SMAS sites.
+```{r}
+sites_master <- read.csv(file.path(root_dir,
+                                   "data_input",
+                                   "site_tables",
+                                   "20191224_Site_Field_cleaned_final.csv"),
+                         stringsAsFactors = FALSE)
+```
+
+## EDDs
+
 ```{r}
 # Load the standard column names.
 source(file.path("source",
-                 "column_names.R"))
+                 "read_als.R"))
+```
+
+
+```{r}
+als_df <- map_df(list.files(path = input_path),
+                  ~ import_als(.path = input_path,
+                               .folder = .x))
 ```
 
 ```{r}
+ ### Generate site IDs for field data by pulling info from sample_name before 3rd "-".
+als_df <- als_df %>% 
+  mutate(site_id = if_else(sample_source %in% "field" & sample_type_code %in% "N",
+      sub("^(([^-]*-){2}[^-]*).*", "\\1" , sample_name),
+      NA_character_
+    ))
+```
+
+```{r}
+als_df <- als_df %>% 
+    mutate(
+      DEC_sample_type = case_when(
+        sample_source %in% "Field" &
+          sample_type_code %in% "N" &
+          grepl("W(S)?-EB| EB|EB_", sample_name) ~ "EB",
+        sample_source %in% "Field" &
+          sample_type_code %in% "N" &
+          grepl("W(S)?-FB| FB|FB_", sample_name) ~ "FB",
+        sample_source == "Field" &
+          sample_type_code == "N" &
+          grepl("[-Ww ](S)?[Dd][Uu][Pp]|[Dd][Uu][Pp]_", sample_name) ~ "DUP",
+        TRUE ~ NA_character_
+      )
+    )
+```
+
+
+```{r}
 # Initialize loop objects and variables
-folder_list <- list.files(path = input.path)
+folder_list <- list.files(path = input_path)
 nfolder_list <- length(folder_list)
 RSfile_list <- list()
 RSfile_list.sample <- list()
@@ -51,8 +101,8 @@ message(paste0(nfolder_list, " EDDs present:\n"))
 # Loop through each file (folder) present in folder_list
 for (i in 1:nfolder_list) {
   print(folder_list[i])
-  input.i <- paste0(input.path, "/", folder_list[i])
-  output.i <- file.path(root.dir, "data_output")
+  input.i <- paste0(input_path, "/", folder_list[i])
+  output.i <- file.path(root_dir, "data_output")
   
   # rename revised EDD filenames if they exist
   file_to_rename <- c("TestResultQC_v3 REV.txt",
@@ -113,22 +163,6 @@ for (i in 1:nfolder_list) {
   
   # Generate DEC_sample_type field and and populate with EB code as needed. Other records are filled with NA when creating field (first line).
   #Must use specific variants for EB including matrix code because of 13-EBCR-16.3
-  
-  temp_sample <- temp_sample %>%
-    mutate(
-      DEC_sample_type2 = case_when(
-        sample_source %in% "Field" &
-          sample_type_code %in% "N" &
-          grepl("W(S)?-EB| EB|EB_", sample_name) ~ "EB",
-        sample_source %in% "Field" &
-          sample_type_code %in% "N" &
-          grepl("W(S)?-FB| FB|FB_", sample_name) ~ "FB",
-        sample_source == "Field" &
-          sample_type_code == "N" &
-          grepl("[-Ww ](S)?[Dd][Uu][Pp]|[Dd][Uu][Pp]_", sample_name) ~ "DUP",
-        TRUE ~ NA_character_
-      )
-    )
   
   temp_sample$DEC_sample_type <-
     ifelse(
@@ -489,18 +523,18 @@ See if matches for generated site IDs exist in master sites table. If mismatches
 
 
 #Format fields to add leading, and keep trailing zeros before creating BAS_LOC_RM (site ID) field.
-sites.master$BASIN <- formatC(sites.master$BASIN, width = 2, format = "d", flag = "0")
+sites_master$BASIN <- formatC(sites_master$BASIN, width = 2, format = "d", flag = "0")
 #Issue with sites that use "001" as rivermile. 001 will read into R as "1" and will therefore be reformatted to "1.0".
-sites.master$RIVMILE <- formatC( sites.master$RIVMILE, format='f', digits=1 )
+sites_master$RIVMILE <- formatC( sites_master$RIVMILE, format='f', digits=1 )
 
 #Create BAS_LOC_RM field in reference table
-# sites.master$BAS_LOC_RM <- ifelse(!is.na(sites.master$BASIN) & !is.na(sites.master$LOCATION) & !is.na(sites.master$RIVMILE),
-#        paste0(sites.master$BASIN,"-",sites.master$LOCATION,"-",sites.master$RIVMILE),NA)
+# sites_master$BAS_LOC_RM <- ifelse(!is.na(sites_master$BASIN) & !is.na(sites_master$LOCATION) & !is.na(sites_master$RIVMILE),
+#        paste0(sites_master$BASIN,"-",sites_master$LOCATION,"-",sites_master$RIVMILE),NA)
 
 # List unique site IDs generated and creat match/mismatch lists
 siteids.present <- unique(RIBSdata$SiteID[!is.na(RIBSdata$SiteID)])
-siteids.mismatch <- siteids.present[!(siteids.present %in% sites.master$BAS_LOC_RM)]
-siteids.match <- siteids.present[(siteids.present %in% sites.master$BAS_LOC_RM)]
+siteids.mismatch <- siteids.present[!(siteids.present %in% sites_master$BAS_LOC_RM)]
+siteids.match <- siteids.present[(siteids.present %in% sites_master$BAS_LOC_RM)]
 
 # See if mismatches exist. If so (else), prepare code for renaming mismatched site IDs and print to console to be pasted into the chunk below. 2nd instance of each site ID (after the ~) to be corrected manually after pasting in chunk below.
 if (length(siteids.mismatch) == 0 & length(siteids.match) > 0) {
@@ -542,8 +576,8 @@ RIBSdata.siteids.corr <- RIBSdata %>%
 
 # Check again for mismatches and print
 siteids.present.corr <- unique(RIBSdata.siteids.corr$SiteID[!is.na(RIBSdata.siteids.corr$SiteID)])
-siteids.mismatch2 <- siteids.present.corr[!(siteids.present.corr %in% sites.master$BAS_LOC_RM)]
-siteids.match2 <- siteids.present.corr[(siteids.present.corr %in% sites.master$BAS_LOC_RM)]
+siteids.mismatch2 <- siteids.present.corr[!(siteids.present.corr %in% sites_master$BAS_LOC_RM)]
+siteids.match2 <- siteids.present.corr[(siteids.present.corr %in% sites_master$BAS_LOC_RM)]
 
 if(length(siteids.mismatch2 > 0)){
   message("The following ", length(siteids.mismatch2), " sites were still not matched:")
@@ -559,12 +593,12 @@ Write dataset to CSV. (Remember to copy report or Rmd to output dir)
 # Manualy copy to L:\DOW\SMAS\StreamDatabase\Chemistry\raw_merge-bind\[year]\. Automate this after L drive is reorganized.
 
 if(exists("RIBSdata.siteids.corr")){
-  write.table(RIBSdata.siteids.corr, file= paste0(output.path,"/",output.filename),sep=",", row.names = FALSE)
+  write.table(RIBSdata.siteids.corr, file= paste0(output_path,"/",output_filename),sep=",", row.names = FALSE)
 } else {
-  write.table(RIBSdata, file= paste0(output.path,"/",output.filename),sep=",", row.names = FALSE)
+  write.table(RIBSdata, file= paste0(output_path,"/",output_filename),sep=",", row.names = FALSE)
 }
 
-# write.table(RIBSdata.sample, file= file.path(root.dir, "data_output", "2018_Ramapo_SAMPLE_merge-bind_2-12-19.csv"),sep=",", row.names = FALSE)
+# write.table(RIBSdata.sample, file= file.path(root_dir, "data_output", "2018_Ramapo_SAMPLE_merge-bind_2-12-19.csv"),sep=",", row.names = FALSE)
 
 ### Add step to append this data to a raw archive of ALS data? (And keep track of which projects have been run) ###
   # Use L:\DOW\SMAS\StreamDatabase\Chemistry\raw_merge-bind\[year]\
@@ -576,6 +610,6 @@ Create data frame of unique chem params for creating chem_parameter table (p-cod
 ```{r}
 chem_params <- unique(RIBSdata[c("fraction", "cas_rn", "chemical_name")])
 
-write.table(chem_params, file= paste0(output.path,"/","chem_params.csv"),sep=",", row.names = FALSE)
+write.table(chem_params, file= paste0(output_path,"/","chem_params.csv"),sep=",", row.names = FALSE)
 
 ```
