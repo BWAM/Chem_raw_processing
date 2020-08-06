@@ -5,219 +5,483 @@ date: "January 11, 2019"
 output: html_document
 ---
 
-### Directions: Copy "RIBS_EDD_processing_MASTER.Rmd" from root folder into project-specific folder in data_output and rename/modify as needed.
+### Directions: 
+
+Copy "RIBS_EDD_processing_MASTER.Rmd" from root folder into project-specific folder in data_output and rename/modify as needed.
 
 Load libraries, find the R-project root directory, and specify input/output files.
 ```{r}
 library(dplyr)
 root.dir <- rprojroot::find_root("Chem_raw_processing.Rproj")
-
 ##### User-defined variables #####
 
 # DO NOT RUN FULL SCRIPT. MUST RUN CHUNK-BY-CHUNK AND CORRECT SITE IDs AND DATA WHERE NEEDED #
 
 # Must create the directories specified in input.path and output.path #
-input.path <- file.path(root.dir, "data_input", "2017", "TEST")
-output.path <- file.path(root.dir, "data_output", "2017", "TEST")
-output.filename <- "2017_tabseptest_2020-01-28_TEST.csv"
+input.path <- file.path(root.dir, "data_input", "2020")
+output.path <- file.path(root.dir, "data_output", "2020", "TEST")
+output.filename <- paste0("20202_tabseptest_", Sys.Date(), "TEST.csv")
 
 #Specify sites reference table
-# sites.master <- read.csv(file.path(root.dir, "data_input/site_tables/Sites_2017-2018_Charlie.csv"))
-# sites.master <- read.csv(file.path(root.dir, "data_input/site_tables/Sites_2018-12-17_Di.csv"))
-# sites.master <- read.csv(file.path(root.dir, "data_input/site_tables/RIBS_RoutineNetwork_siteIDs_2018.csv"))
 sites.master <- read.csv(file.path(root.dir, "data_input/site_tables/20191224_Site_Field_cleaned_final.csv"))
-
-
 # DO NOT RUN FULL SCRIPT. MUST RUN CHUNK-BY-CHUNK AND CORRECT SITE IDs AND DATA WHERE NEEDED #
-
-##################################
-
 ```
 
 Main process: 
 1) Load in EDD components from each folder contained in the target directory. 
 2) Add SiteID and DEC_sample_type fields to each Sample_v3.
 3) Merge TestResultQC_v3 and Sample_v3 files together for each EDD set.
-```{r}
 
-# Initialize loop objects and variables 
+```{r}
+result_cols <- c(
+        "sys_sample_code",
+        "lab_anl_method_name",
+        "analysis_date",
+        "fraction",
+        "column_number",
+        "test_type",
+        "lab_matrix_code",
+        "analysis_location",
+        "basis",
+        "container_id",
+        "dilution_factor",
+        "prep_method",
+        "prep_date",
+        "leachate_method",
+        "leachate_date",
+        "lab_name_code",
+        "qc_level",
+        "lab_sample_id",
+        "percent_moisture",
+        "subsample_amount",
+        "subsample_amount_unit",
+        "analyst_name",
+        "instrument_id",
+        "comment",
+        "preservative",
+        "final_volume",
+        "final_volume_unit",
+        "cas_rn",
+        "chemical_name",
+        "result_value",
+        "result_error_delta",
+        "result_type_code",
+        "reportable_result",
+        "detect_flag",
+        "lab_qualifiers",
+        "validator_qualifiers",
+        "interpreted_qualifiers",
+        "validated_yn",
+        "method_detection_limit",
+        "reporting_detection_limit",
+        "quantitation_limit",
+        "result_unit",
+        "detection_limit_unit",
+        "tic_retention_time",
+        "minimum_detectable_conc",
+        "counting_error",
+        "uncertainty",
+        "critical_value",
+        "validation_level",
+        "result_comment",
+        "qc_original_conc",
+        "qc_spike_added",
+        "qc_spike_measured",
+        "qc_spike_recovery",
+        "qc_dup_original_conc",
+        "qc_dup_spike_added",
+        "qc_dup_spike_measured",
+        "qc_dup_spike_recovery",
+        "qc_rpd",
+        "qc_spike_lcl",
+        "qc_spike_ucl",
+        "qc_rpd_cl",
+        "qc_spike_status",
+        "qc_dup_spike_status",
+        "qc_rpd_status",
+        "lab_sdg"
+      )
+
+sample_cols <- c(
+        "data_provider",
+        "sys_sample_code",
+        "sample_name",
+        "sample_matrix_code",
+        "sample_type_code",
+        "sample_source",
+        "parent_sample_code",
+        "sample_delivery_group",
+        "sample_date",
+        "sys_loc_code",
+        "start_depth",
+        "end_depth",
+        "depth_unit",
+        "chain_of_custody",
+        "sent_to_lab_date",
+        "sample_receipt_date",
+        "sampler",
+        "sampling_company_code",
+        "sampling_reason",
+        "sampling_technique",
+        "task_code",
+        "collection_quarter",
+        "composite_yn",
+        "composite_desc",
+        "sample_class",
+        "custom_field_1",
+        "custom_field_2",
+        "custom_field_3",
+        "comment"
+      )
+```
+
+```{r}
+# Initialize loop objects and variables
 folder_list <- list.files(path = input.path)
-nfolder_list = length(folder_list)
+nfolder_list <- length(folder_list)
 RSfile_list <- list()
 RSfile_list.sample <- list()
-i=1
+i <- 1
 
 message(paste0(nfolder_list, " EDDs present:\n"))
 
 # Loop through each file (folder) present in folder_list
-for (i in 1:nfolder_list){
+for (i in 1:nfolder_list) {
   print(folder_list[i])
   input.i <- paste0(input.path, "/", folder_list[i])
   output.i <- file.path(root.dir, "data_output")
-
-  # rename revised EDD filenames if they exist
-  file.rename(file.path(input.i,"TestResultQC_v3 REV.txt"), file.path(input.i,"TestResultQC_v3.txt"))
-  file.rename(file.path(input.i,"Sample_v3 REV.txt"), file.path(input.i,"Sample_v3.txt"))
-
-  temp_result <- read.table(text = gsub("\t",",", readLines(file.path(input.i,"TestResultQC_v3.txt"))),
-                                      sep=",",fill=TRUE,header=FALSE,stringsAsFactors=FALSE,    
-                    col.names = c("sys_sample_code","lab_anl_method_name","analysis_date","fraction","column_number",
-                                  "test_type","lab_matrix_code","analysis_location","basis","container_id","dilution_factor",
-                                  "prep_method","prep_date","leachate_method","leachate_date","lab_name_code","qc_level",
-                                  "lab_sample_id","percent_moisture","subsample_amount","subsample_amount_unit","analyst_name",
-                                  "instrument_id","comment","preservative","final_volume","final_volume_unit","cas_rn","chemical_name",
-                                  "result_value","result_error_delta","result_type_code","reportable_result","detect_flag",
-                                  "lab_qualifiers","validator_qualifiers","interpreted_qualifiers","validated_yn",
-                                  "method_detection_limit","reporting_detection_limit","quantitation_limit","result_unit",
-                                  "detection_limit_unit","tic_retention_time","minimum_detectable_conc","counting_error","uncertainty",
-                                  "critical_value","validation_level","result_comment","qc_original_conc","qc_spike_added",
-                                  "qc_spike_measured","qc_spike_recovery","qc_dup_original_conc","qc_dup_spike_added",
-                                  "qc_dup_spike_measured","qc_dup_spike_recovery","qc_rpd","qc_spike_lcl","qc_spike_ucl","qc_rpd_cl",
-                                  "qc_spike_status","qc_dup_spike_status","qc_rpd_status","lab_sdg"),
-                    colClasses = c(fraction="character")
-                    )
- 
-  temp_sample <- read.table(text = gsub("\t",",", readLines(file.path(input.i,"Sample_v3.txt"))),
-                                      sep=",",fill=TRUE,header=FALSE,stringsAsFactors=FALSE,
-                    col.names = c("data_provider","sys_sample_code","sample_name","sample_matrix_code","sample_type_code",
-                                  "sample_source","parent_sample_code","sample_delivery_group","sample_date","sys_loc_code",
-                                  "start_depth","end_depth","depth_unit","chain_of_custody","sent_to_lab_date","sample_receipt_date",
-                                  "sampler","sampling_company_code","sampling_reason","sampling_technique","task_code",
-                                  "collection_quarter","composite_yn","composite_desc","sample_class","custom_field_1","custom_field_2",
-                                  "custom_field_3","comment"))
-
- 
-
   
-  ##########  Generating site IDs  ##########  
+  # rename revised EDD filenames if they exist
+  file_to_rename <- c("TestResultQC_v3 REV.txt",
+                      "Sample_v3 REV.txt")
+  for (i in file_to_rename) {
+    # Check that the file exists.
+    # If TRUE, rename the file.
+    if (file.exists(file.path(input.i, i))) {
+      file.rename(file.path(input.i, i),
+                  file.path(input.i, gsub(" REV.txt", ".txt", i)))
+    }
+  }
+  
+  
+  temp_result <-
+    read.table(
+      text = gsub("\t", ",", readLines(
+        file.path(input.i, "TestResultQC_v3.txt")
+      )),
+      sep = ",",
+      fill = TRUE,
+      header = FALSE,
+      stringsAsFactors = FALSE,
+      col.names = result_cols,
+      colClasses = c(fraction = "character")
+    )
+  
+  temp_sample <-
+    read.table(
+      text = gsub("\t", ",", readLines(file.path(
+        input.i, "Sample_v3.txt"
+      ))),
+      sep = ",",
+      fill = TRUE,
+      header = FALSE,
+      stringsAsFactors = FALSE,
+      col.names = sample_cols
+    )
+  
+  
+  
+  
+  ##########  Generating site IDs  ##########
   
   ### Generate site IDs for field data by pulling info from sample_name before 3rd "-".
-  temp_sample$SiteID <- ifelse(temp_sample$sample_source == "field" & temp_sample$sample_type_code == "N",
-                               sub("^(([^-]*-){2}[^-]*).*","\\1" , temp_sample$sample_name), NA)
-
+  temp_sample$SiteID <-
+    ifelse(
+      temp_sample$sample_source == "field" &
+        temp_sample$sample_type_code == "N",
+      sub("^(([^-]*-){2}[^-]*).*", "\\1" , temp_sample$sample_name),
+      NA
+    )
+  
   ## Alternative method #2 to generating SiteID. Pulls string from before first underscore
-    # temp_sample$SiteID <- ifelse(temp_sample$sample_source == "field" & temp_sample$sample_type_code == "N",
-    #                            str_extract(temp_sample$sample_name, "[^_]+"), NA)
-    
+  # temp_sample$SiteID <- ifelse(temp_sample$sample_source == "field" & temp_sample$sample_type_code == "N",
+  #                            str_extract(temp_sample$sample_name, "[^_]+"), NA)
+  
   ## Alternative method #3 to generating SiteID. Pulls string from position after decimal (as expected in river mile). WOrks better for older data:
-        ## DOES NOT WORK IF NO DECIMAL PRESENT (some site IDs use -001 as rivermile)
-    # temp_sample$SiteID <- ifelse(temp_sample$sample_source == "field" & temp_sample$sample_type_code == "N",
-    #                            substr(temp_sample$sample_name, 1, as.numeric(gregexpr(pattern ='\\.',temp_sample$sample_name)) + 1), NA)
+  ## DOES NOT WORK IF NO DECIMAL PRESENT (some site IDs use -001 as rivermile)
+  # temp_sample$SiteID <- ifelse(temp_sample$sample_source == "field" & temp_sample$sample_type_code == "N",
+  #                            substr(temp_sample$sample_name, 1, as.numeric(gregexpr(pattern ='\\.',temp_sample$sample_name)) + 1), NA)
   
   ###########################################
   
-    
+  
   ##### Locate and code QAQC samples #####
-    ### Add other variants of QAQC sample codes? ###
-    ### Recode below to use lists of matches instead of repasting each block ###
-    ### Better to just pull last three characters of sample ID and look for these? Need to avoids finding these in site names... ###
+  ### Add other variants of QAQC sample codes? ###
+  ### Recode below to use lists of matches instead of repasting each block ###
+  ### Better to just pull last three characters of sample ID and look for these? Need to avoids finding these in site names... ###
+  
+  # Generate DEC_sample_type field and and populate with EB code as needed. Other records are filled with NA when creating field (first line).
+  #Must use specific variants for EB including matrix code because of 13-EBCR-16.3
+  
+  temp_sample <- temp_sample %>% 
+    mutate(DEC_sample_type2 = case_when(
+      sample_source %in% "Field" &
+        sample_type_code %in% "N" &
+        grepl("W(S)?-EB| EB|EB_", sample_name) ~ "EB",
+      sample_source %in% "Field" &
+        sample_type_code %in% "N" &
+        grepl("W(S)?-FB| FB|FB_", sample_name) ~ "FB",
+      sample_source == "Field" &
+        sample_type_code == "N" &
+        grepl(
+          "-[Dd][Uu][Pp]|W[Dd][Uu][Pp]|WS[Dd][Uu][Pp]|[Dd][Uu][Pp]_| [Dd][Uu][Pp]",
+          sample_name
+        ) ~ "DUP",
 
-  # Generate DEC_sample_type field and and populate with EB code as needed. Other records are filled with NA when creating field (first line). 
-    #Must use specific variants for EB including matrix code because of 13-EBCR-16.3
-  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N" &
-                                          grepl("W-EB",temp_sample$sample_name),"EB", NA)
-  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N" &
-                                          grepl("WS-EB",temp_sample$sample_name),"EB",temp_sample$DEC_sample_type)
-  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N" &
-                                          grepl(" EB",temp_sample$sample_name),"EB",temp_sample$DEC_sample_type)
-  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N" &
-                                          grepl("EB_",temp_sample$sample_name),"EB",temp_sample$DEC_sample_type)
-
+      
+      TRUE ~ NA_character_
+    ))
+  
+  temp_sample$DEC_sample_type <-
+    ifelse(
+      temp_sample$sample_source == "Field" &
+        temp_sample$sample_type_code == "N" &
+        grepl("W-EB", temp_sample$sample_name),
+      "EB",
+      NA
+    )
+  temp_sample$DEC_sample_type <-
+    ifelse(
+      temp_sample$sample_source == "Field" &
+        temp_sample$sample_type_code == "N" &
+        grepl("WS-EB", temp_sample$sample_name),
+      "EB",
+      temp_sample$DEC_sample_type
+    )
+  temp_sample$DEC_sample_type <-
+    ifelse(
+      temp_sample$sample_source == "Field" &
+        temp_sample$sample_type_code == "N" &
+        grepl(" EB", temp_sample$sample_name),
+      "EB",
+      temp_sample$DEC_sample_type
+    )
+  temp_sample$DEC_sample_type <-
+    ifelse(
+      temp_sample$sample_source == "Field" &
+        temp_sample$sample_type_code == "N" &
+        grepl("EB_", temp_sample$sample_name),
+      "EB",
+      temp_sample$DEC_sample_type
+    )
+  
   # Populate DEC_sample_type for FB samples as needed.
-  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N" &
-                                          grepl("W-FB",temp_sample$sample_name),"FB",temp_sample$DEC_sample_type)
-  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N" &
-                                          grepl("WS-FB",temp_sample$sample_name),"FB",temp_sample$DEC_sample_type)  
-  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N" &
-                                          grepl(" FB",temp_sample$sample_name),"FB",temp_sample$DEC_sample_type)
+  temp_sample$DEC_sample_type <-
+    ifelse(
+      temp_sample$sample_source == "Field" &
+        temp_sample$sample_type_code == "N" &
+        grepl("W-FB", temp_sample$sample_name),
+      "FB",
+      temp_sample$DEC_sample_type
+    )
+  temp_sample$DEC_sample_type <-
+    ifelse(
+      temp_sample$sample_source == "Field" &
+        temp_sample$sample_type_code == "N" &
+        grepl("WS-FB", temp_sample$sample_name),
+      "FB",
+      temp_sample$DEC_sample_type
+    )
+  temp_sample$DEC_sample_type <-
+    ifelse(
+      temp_sample$sample_source == "Field" &
+        temp_sample$sample_type_code == "N" &
+        grepl(" FB", temp_sample$sample_name),
+      "FB",
+      temp_sample$DEC_sample_type
+    )
   
   # Populate DEC_sample_type for duplicate samples as needed.
-      # Accounts for different DUP variants ("-DUP"", " DUP", "WSDUP", "WDUP", and upper/lowercase instances)
-  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N" &
-                                          grepl("-[Dd][Uu][Pp]",temp_sample$sample_name),"DUP",temp_sample$DEC_sample_type)
-  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N" &
-                                          grepl(" [Dd][Uu][Pp]",temp_sample$sample_name),"DUP",temp_sample$DEC_sample_type)
-  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N" &
-                                          grepl("WS[Dd][Uu][Pp]",temp_sample$sample_name),"DUP",temp_sample$DEC_sample_type)
-  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N" &
-                                          grepl("W[Dd][Uu][Pp]",temp_sample$sample_name),"DUP",temp_sample$DEC_sample_type)
-  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N" &
-                                          grepl("[Dd][Uu][Pp]_",temp_sample$sample_name),"DUP",temp_sample$DEC_sample_type)
+  # Accounts for different DUP variants ("-DUP"", " DUP", "WSDUP", "WDUP", and upper/lowercase instances)
+  temp_sample$DEC_sample_type <-
+    ifelse(
+      temp_sample$sample_source == "Field" &
+        temp_sample$sample_type_code == "N" &
+        grepl("-[Dd][Uu][Pp]", temp_sample$sample_name),
+      "DUP",
+      temp_sample$DEC_sample_type
+    )
+  temp_sample$DEC_sample_type <-
+    ifelse(
+      temp_sample$sample_source == "Field" &
+        temp_sample$sample_type_code == "N" &
+        grepl(" [Dd][Uu][Pp]", temp_sample$sample_name),
+      "DUP",
+      temp_sample$DEC_sample_type
+    )
+  temp_sample$DEC_sample_type <-
+    ifelse(
+      temp_sample$sample_source == "Field" &
+        temp_sample$sample_type_code == "N" &
+        grepl("WS[Dd][Uu][Pp]", temp_sample$sample_name),
+      "DUP",
+      temp_sample$DEC_sample_type
+    )
+  temp_sample$DEC_sample_type <-
+    ifelse(
+      temp_sample$sample_source == "Field" &
+        temp_sample$sample_type_code == "N" &
+        grepl("W[Dd][Uu][Pp]", temp_sample$sample_name),
+      "DUP",
+      temp_sample$DEC_sample_type
+    )
+  temp_sample$DEC_sample_type <-
+    ifelse(
+      temp_sample$sample_source == "Field" &
+        temp_sample$sample_type_code == "N" &
+        grepl("[Dd][Uu][Pp]_", temp_sample$sample_name),
+      "DUP",
+      temp_sample$DEC_sample_type
+    )
   
-
-  # Populate DEC_sample_type for N_DUPPARENT cells by locating DUP samples and finding parent sample by removing DUP code. 
-  dup.vec <- temp_sample$sample_name[temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N" 
-                                     & grepl("-[Dd][Uu][Pp]", temp_sample$sample_name)]
+  
+  # Populate DEC_sample_type for N_DUPPARENT cells by locating DUP samples and finding parent sample by removing DUP code.
+  dup.vec <-
+    temp_sample$sample_name[temp_sample$sample_source == "Field" &
+                              temp_sample$sample_type_code == "N"
+                            &
+                              grepl("-[Dd][Uu][Pp]", temp_sample$sample_name)]
   parent.vec <- gsub("-[Dd][Uu][Pp]", "", dup.vec)
-  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N" 
-                                         & temp_sample$sample_name %in% parent.vec,"N_DUPPARENT",temp_sample$DEC_sample_type)
+  temp_sample$DEC_sample_type <-
+    ifelse(
+      temp_sample$sample_source == "Field" &
+        temp_sample$sample_type_code == "N"
+      &
+        temp_sample$sample_name %in% parent.vec,
+      "N_DUPPARENT",
+      temp_sample$DEC_sample_type
+    )
   
-  dup.vec <- temp_sample$sample_name[temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N"
-                                     & grepl(" [Dd][Uu][Pp]", temp_sample$sample_name)]
+  dup.vec <-
+    temp_sample$sample_name[temp_sample$sample_source == "Field" &
+                              temp_sample$sample_type_code == "N"
+                            &
+                              grepl(" [Dd][Uu][Pp]", temp_sample$sample_name)]
   parent.vec <- gsub(" [Dd][Uu][Pp]", "", dup.vec)
-  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N" 
-                                         & temp_sample$sample_name %in% parent.vec,"N_DUPPARENT",temp_sample$DEC_sample_type)
+  temp_sample$DEC_sample_type <-
+    ifelse(
+      temp_sample$sample_source == "Field" &
+        temp_sample$sample_type_code == "N"
+      &
+        temp_sample$sample_name %in% parent.vec,
+      "N_DUPPARENT",
+      temp_sample$DEC_sample_type
+    )
   
-  dup.vec <- temp_sample$sample_name[temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N"
-                                     & grepl("WS[Dd][Uu][Pp]", temp_sample$sample_name)]
+  dup.vec <-
+    temp_sample$sample_name[temp_sample$sample_source == "Field" &
+                              temp_sample$sample_type_code == "N"
+                            &
+                              grepl("WS[Dd][Uu][Pp]", temp_sample$sample_name)]
   parent.vec <- gsub("WS[Dd][Uu][Pp]", "WS", dup.vec)
-  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N"
-                                         & temp_sample$sample_name %in% parent.vec,"N_DUPPARENT",temp_sample$DEC_sample_type)
+  temp_sample$DEC_sample_type <-
+    ifelse(
+      temp_sample$sample_source == "Field" &
+        temp_sample$sample_type_code == "N"
+      &
+        temp_sample$sample_name %in% parent.vec,
+      "N_DUPPARENT",
+      temp_sample$DEC_sample_type
+    )
   
-  dup.vec <- temp_sample$sample_name[temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N"
-                                     & grepl("W[Dd][Uu][Pp]", temp_sample$sample_name)]
+  dup.vec <-
+    temp_sample$sample_name[temp_sample$sample_source == "Field" &
+                              temp_sample$sample_type_code == "N"
+                            &
+                              grepl("W[Dd][Uu][Pp]", temp_sample$sample_name)]
   parent.vec <- gsub("W[Dd][Uu][Pp]", "W", dup.vec)
-  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N"
-                                         & temp_sample$sample_name %in% parent.vec,"N_DUPPARENT",temp_sample$DEC_sample_type)
-
-  dup.vec <- temp_sample$sample_name[temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N"
-                                     & grepl("[Dd][Uu][Pp]_", temp_sample$sample_name)]
+  temp_sample$DEC_sample_type <-
+    ifelse(
+      temp_sample$sample_source == "Field" &
+        temp_sample$sample_type_code == "N"
+      &
+        temp_sample$sample_name %in% parent.vec,
+      "N_DUPPARENT",
+      temp_sample$DEC_sample_type
+    )
+  
+  dup.vec <-
+    temp_sample$sample_name[temp_sample$sample_source == "Field" &
+                              temp_sample$sample_type_code == "N"
+                            &
+                              grepl("[Dd][Uu][Pp]_", temp_sample$sample_name)]
   parent.vec <- gsub("[Dd][Uu][Pp]_", "_", dup.vec)
-  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N"
-                                         & temp_sample$sample_name %in% parent.vec,"N_DUPPARENT",temp_sample$DEC_sample_type)
-
+  temp_sample$DEC_sample_type <-
+    ifelse(
+      temp_sample$sample_source == "Field" &
+        temp_sample$sample_type_code == "N"
+      &
+        temp_sample$sample_name %in% parent.vec,
+      "N_DUPPARENT",
+      temp_sample$DEC_sample_type
+    )
+  
   # Populate remaining DEC_sample_type NAs for field data with "N" for normal samples (assumes all remaining NAs are normal samples).
-  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "Field" & temp_sample$sample_type_code == "N" &
-                                          is.na(temp_sample$DEC_sample_type),"N",temp_sample$DEC_sample_type)
-
+  temp_sample$DEC_sample_type <-
+    ifelse(
+      temp_sample$sample_source == "Field" &
+        temp_sample$sample_type_code == "N" &
+        is.na(temp_sample$DEC_sample_type),
+      "N",
+      temp_sample$DEC_sample_type
+    )
+  
   # Convert Lab NAs to "Lab" (better than keeping as NAs to avoid subsetting issues in QAQC script; found that bracket subsetting in a column that contains NAs returns blank/NA rows).
-  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "Lab" & 
-                                          is.na(temp_sample$DEC_sample_type), "Lab", temp_sample$DEC_sample_type)
- 
+  temp_sample$DEC_sample_type <-
+    ifelse(
+      temp_sample$sample_source == "Lab" &
+        is.na(temp_sample$DEC_sample_type),
+      "Lab",
+      temp_sample$DEC_sample_type
+    )
+  
   # Count number of each sample type identified and print
   count.Normal <- length(grep("^N$", temp_sample$DEC_sample_type))
-  message(paste0(count.Normal," N"))
-  count.N_DUPPARENT <- length(grep("N_DUPPARENT", temp_sample$DEC_sample_type))
-  message(paste0(count.N_DUPPARENT," N_DUPPARENT"))
+  message(paste0(count.Normal, " N"))
+  count.N_DUPPARENT <-
+    length(grep("N_DUPPARENT", temp_sample$DEC_sample_type))
+  message(paste0(count.N_DUPPARENT, " N_DUPPARENT"))
   count.DUP <- length(grep("^DUP$", temp_sample$DEC_sample_type))
-  message(paste0(count.DUP," DUP"))
+  message(paste0(count.DUP, " DUP"))
   count.EB <- length(grep("^EB$", temp_sample$DEC_sample_type))
-  message(paste0(count.EB," EB"))
-  count.FB <- length(grep("^FB$", temp_sample$DEC_sample_type))     # FB only present in Routine Network data
-  message(paste0(count.FB," FB\n"))
-  # count.MS <- length(grep("^MS$", temp_sample$sample_type_code))  
+  message(paste0(count.EB, " EB"))
+  count.FB <-
+    length(grep("^FB$", temp_sample$DEC_sample_type))     # FB only present in Routine Network data
+  message(paste0(count.FB, " FB\n"))
+  # count.MS <- length(grep("^MS$", temp_sample$sample_type_code))
   # message(paste0(count.MS," MS (including lab MSs)\n"))
   
   # Check if equal number of DUP and N_DUPPARENT codes assigned. Stop script if not.
-  if(identical(count.DUP,count.N_DUPPARENT) == FALSE){
+  if (identical(count.DUP, count.N_DUPPARENT) == FALSE) {
     stop("    DUP and N_DUPPARENT counts do not match (script stopped)")
   }
-    
-  ##### Merge sample and result files #####
-    # Must merge by sys_sample_code and not sample_name in order to appropriately associate MS, dissolved samples (sometimes "Diss" or "S" added to end of sys_sample_code), and other lab samples with appropriate results.
   
-  temp_RSmerge <- merge(temp_sample,temp_result,by="sys_sample_code", all=TRUE)
-
+  ##### Merge sample and result files #####
+  # Must merge by sys_sample_code and not sample_name in order to appropriately associate MS, dissolved samples (sometimes "Diss" or "S" added to end of sys_sample_code), and other lab samples with appropriate results.
+  
+  temp_RSmerge <-
+    merge(temp_sample, temp_result, by = "sys_sample_code", all = TRUE)
+  
   filenm <- file.path(output.i,
-                      paste(folder_list[i],"_RSmerge.csv", sep=""))
-
+                      paste(folder_list[i], "_RSmerge.csv", sep = ""))
+  
   if ((nrow(temp_result)) < (nrow(temp_RSmerge))) {
     stop('SCRIPT STOPPED: Extra records created in merge. Check EDD for errors.')
   }
   if ((nrow(temp_result)) > (nrow(temp_RSmerge))) {
     stop('SCRIPT STOPPED: Not enough records created with merge. Check for errors.')
   }
-
+  
   # Create name using EDD and added suffix, and assign to current data frame
   mergenm <- paste0(folder_list[i], "_RSmerge")
   mergefile <- assign(mergenm, temp_RSmerge)
@@ -225,7 +489,7 @@ for (i in 1:nfolder_list){
   # Do the same for sample file data (used for assessing samples present and counting sample totals)
   mergenm.sample <- paste0(folder_list[i], "_Samplemerge")
   mergefile.sample <- assign(mergenm.sample, temp_sample)
-
+  
   #Add current data frame to the list of all dataframes
   RSfile_list[[i]] <- mergefile
   RSfile_list.sample[[i]] <- mergefile.sample
@@ -240,41 +504,79 @@ RIBSdata = do.call(rbind, RSfile_list)
 RIBSdata.sample = do.call(rbind, RSfile_list.sample)
 
 # Move new Site ID and DEC Sample Type columns to beginning of data frame
-RIBSdata <- RIBSdata %>% 
+RIBSdata <- RIBSdata %>%
   select(SiteID, DEC_sample_type, everything())
-RIBSdata.sample <- RIBSdata.sample %>% 
+RIBSdata.sample <- RIBSdata.sample %>%
   select(SiteID, DEC_sample_type, everything())
 
 # List unqique sampling dates to verify all present
-sample.dates <- unique(as.Date(RIBSdata.sample$sample_date[RIBSdata.sample$sample_source == "Field"], "%m/%d/%Y %H:%M:%S"))
+sample.dates <-
+  unique(as.Date(RIBSdata.sample$sample_date[RIBSdata.sample$sample_source == "Field"], "%m/%d/%Y %H:%M:%S"))
 # sample.dates <- unique(as.Date(RIBSdata.sample$sample_date[RIBSdata.sample$sample_source == "Field"], "%Y-%m-%d %H:%M:%S"))
-message(paste0(length(sample.dates)," unique sample dates present:\n"))
+message(paste0(length(sample.dates), " unique sample dates present:\n"))
 cat(as.character(sort(sample.dates)), sep = "\n")
 
 
 ### Summarize sample counts to compare to COCs (ensure sure all codes assigned appropriately).
-totalcount.Normal <- length(grep("^N$", RIBSdata.sample$DEC_sample_type))
-totalcount.DUP <- length(grep("^DUP$", RIBSdata.sample$DEC_sample_type))
-totalcount.N_DUPPARENT <- length(grep("N_DUPPARENT", RIBSdata.sample$DEC_sample_type))
-totalcount.EB <- length(grep("^EB$", RIBSdata.sample$DEC_sample_type))
-totalcount.FB <- length(grep("^FB$", RIBSdata.sample$DEC_sample_type))     # FB only present in Routine Network data
-totalcount.MS <- length(grep("^MS$", RIBSdata.sample$sample_type_code))  
+totalcount.Normal <-
+  length(grep("^N$", RIBSdata.sample$DEC_sample_type))
+totalcount.DUP <-
+  length(grep("^DUP$", RIBSdata.sample$DEC_sample_type))
+totalcount.N_DUPPARENT <-
+  length(grep("N_DUPPARENT", RIBSdata.sample$DEC_sample_type))
+totalcount.EB <-
+  length(grep("^EB$", RIBSdata.sample$DEC_sample_type))
+totalcount.FB <-
+  length(grep("^FB$", RIBSdata.sample$DEC_sample_type))     # FB only present in Routine Network data
+totalcount.MS <-
+  length(grep("^MS$", RIBSdata.sample$sample_type_code))
 
-message(paste0("\nTotal samples identified:\n", totalcount.Normal, " N\n", totalcount.N_DUPPARENT, " N_DUPPARENT\n", totalcount.DUP, " DUP\n",  totalcount.EB, " EB\n", totalcount.FB, " FB (should only be present for Routine)\n" 
-               # ,totalcount.MS, " MS (including lab MSs)\n"
-               ))
+message(
+  paste0(
+    "\nTotal samples identified:\n",
+    totalcount.Normal,
+    " N\n",
+    totalcount.N_DUPPARENT,
+    " N_DUPPARENT\n",
+    totalcount.DUP,
+    " DUP\n",
+    totalcount.EB,
+    " EB\n",
+    totalcount.FB,
+    " FB (should only be present for Routine)\n"
+    # ,totalcount.MS, " MS (including lab MSs)\n"
+  )
+)
 
-if(totalcount.DUP == 0){warning(paste0("    WARNING: NO DUPLICATES PRESENT\n"))}
-if(totalcount.N_DUPPARENT == 0){warning(paste0("    WARNING: NO DUP PARENTS PRESENT\n"))}
-if(totalcount.EB == 0){warning(paste0("    WARNING: NO EBs PRESENT\n"))}
-if(totalcount.FB == 0){warning(paste0("    WARNING: NO FBs PRESENT (only required for Routine data)\n"))}
-if(totalcount.FB > 0){warning(paste0("    WARNING: FBs PRESENT (only should be present for Routine data)\n"))}
-if(totalcount.MS == 0){warning(paste0("    WARNING: NO MSs PRESENT\n"))}
+if (totalcount.DUP == 0) {
+  warning(paste0("    WARNING: NO DUPLICATES PRESENT\n"))
+}
+if (totalcount.N_DUPPARENT == 0) {
+  warning(paste0("    WARNING: NO DUP PARENTS PRESENT\n"))
+}
+if (totalcount.EB == 0) {
+  warning(paste0("    WARNING: NO EBs PRESENT\n"))
+}
+if (totalcount.FB == 0) {
+  warning(paste0("    WARNING: NO FBs PRESENT (only required for Routine data)\n"))
+}
+if (totalcount.FB > 0) {
+  warning(paste0(
+    "    WARNING: FBs PRESENT (only should be present for Routine data)\n"
+  ))
+}
+if (totalcount.MS == 0) {
+  warning(paste0("    WARNING: NO MSs PRESENT\n"))
+}
 
 # Check for ALS reanalyses (could mean duplicate results for one sample/param combination)
-reanalyses <- RIBSdata$sys_sample_code[(endsWith(RIBSdata$sys_sample_code,"RE"))]
-if(length(reanalyses) > 0){
-  message("\nWARNING: Reanalyses present (possible duplicate results for one sample/param combination): \n",reanalyses)
+reanalyses <-
+  RIBSdata$sys_sample_code[(endsWith(RIBSdata$sys_sample_code, "RE"))]
+if (length(reanalyses) > 0) {
+  message(
+    "\nWARNING: Reanalyses present (possible duplicate results for one sample/param combination): \n",
+    reanalyses
+  )
 } 
 
 ```
@@ -329,7 +631,7 @@ if (length(siteids.mismatch) == 0 & length(siteids.match) > 0) {
 SiteID and data corrections:
 ### Run this chunk only if site ID mismatches found and need to be corrected, or other data corrections needed. ###
 User manually corrects site IDs that couldn't be located in master sites table by pasting the output code from above and correct the 2nd instance of each site ID (after the ~).
-```{r correct_data,echo=TRUE}
+```{r correct_data,echo=TRUE, eval=FALSE}
 RIBSdata.siteids.corr <- RIBSdata %>% 
   mutate(SiteID = case_when(
     SiteID == '06-TOUGH-32.8' ~ '06-TOGH-32.8',
