@@ -1,0 +1,363 @@
+---
+title: "RIBS_EDD_processing"
+author: "Gavin Lemley"
+date: "January 11, 2019"
+output: html_document
+---
+
+### Directions: Copy "RIBS_EDD_processing_MASTER.Rmd" from root folder into project-specific folder in data_output and rename/modify as needed.
+
+Load libraries, find the R-project root directory, and specify input/output files.
+```{r}
+library(dplyr)
+library(stringr)
+root.dir <- rprojroot::find_root("Chem_raw_processing.Rproj")
+
+##### User-defined variables #####
+
+# DO NOT RUN FULL SCRIPT. MUST RUN CHUNK-BY-CHUNK AND CORRECT SITE IDs AND DATA WHERE NEEDED #
+
+# Must create the directories specified in input.path and output.path #
+input.path <- file.path(root.dir, "data_input", "2016")
+output.path <- file.path(root.dir, "data_output", "2016")
+output.batch.filename <- paste0("2016_all_chem_raw_", Sys.Date(), "_.csv")
+
+#Specify sites reference table
+
+sites.master <- readxl::read_excel(file.path(root.dir, "data_input/site_tables/RIBSchem_historic_BioSiteJoin_2020-04-28.xlsx"))
+sites.master_equis <- read.csv(file.path(root.dir, "data_input/site_tables/equis_location_history.csv"))
+
+
+# DO NOT RUN FULL SCRIPT. MUST RUN CHUNK-BY-CHUNK AND CORRECT SITE IDs AND DATA WHERE NEEDED #
+
+##################################
+
+```
+
+Main process: 
+1) Load in EDD components from each folder contained in the target directory. 
+2) Add SiteID and DEC_sample_type fields to each Sample_v3.
+3) Merge TestResultQC_v3 and Sample_v3 files together for each EDD set.
+```{r}
+
+# Initialize loop objects and variables 
+folder_list <- list.files(path = input.path)
+nfolder_list = length(folder_list)
+RSfile_list <- list()
+RSfile_list.sample <- list()
+RSfile_list.result <- list()
+
+i=1
+
+message(paste0(nfolder_list, " EDDs present:\n"))
+
+# Loop through each file (folder) present in folder_list
+for (i in 1:nfolder_list){
+  print(folder_list[i])
+  input.i <- paste0(input.path, "/", folder_list[i])
+  output.i <- file.path(root.dir, "data_output")
+  
+  #New function below reads both tab sep and comma sep files (converts tabs to commas)
+  # temp_result_orig <- read.table(file.path(input.i,"TestResultQC_v3.txt"),
+  #                                     sep=",",fill=TRUE,header=FALSE,stringsAsFactors=FALSE,
+  temp_result <- read.table(text = gsub("\t",",", readLines(file.path(input.i,"TestResultQC_v3.txt"))),
+                                      sep=",",fill=TRUE,header=FALSE,stringsAsFactors=FALSE,
+                    col.names = c("sys_sample_code","lab_anl_method_name","analysis_date","fraction","column_number",
+                                  "test_type","lab_matrix_code","analysis_location","basis","container_id","dilution_factor",
+                                  "prep_method","prep_date","leachate_method","leachate_date","lab_name_code","qc_level",
+                                  "lab_sample_id","percent_moisture","subsample_amount","subsample_amount_unit","analyst_name",
+                                  "instrument_id","comment","preservative","final_volume","final_volume_unit","cas_rn","chemical_name",
+                                  "result_value","result_error_delta","result_type_code","reportable_result","detect_flag",
+                                  "lab_qualifiers","validator_qualifiers","interpreted_qualifiers","validated_yn",
+                                  "method_detection_limit","reporting_detection_limit","quantitation_limit","result_unit",
+                                  "detection_limit_unit","tic_retention_time","minimum_detectable_conc","counting_error","uncertainty",
+                                  "critical_value","validation_level","result_comment","qc_original_conc","qc_spike_added",
+                                  "qc_spike_measured","qc_spike_recovery","qc_dup_original_conc","qc_dup_spike_added",
+                                  "qc_dup_spike_measured","qc_dup_spike_recovery","qc_rpd","qc_spike_lcl","qc_spike_ucl","qc_rpd_cl",
+                                  "qc_spike_status","qc_dup_spike_status","qc_rpd_status","lab_sdg"),
+                    colClasses = c(fraction="character")
+                    )
+ 
+  # temp_sample_orig <- read.table(file.path(input.i,"Sample_v3.txt"),
+  #                           sep=",",fill=TRUE,header=FALSE, stringsAsFactors=FALSE,
+  temp_sample <- read.table(text = gsub("\t",",", readLines(file.path(input.i,"Sample_v3.txt"))),
+                                      sep=",",fill=TRUE,header=FALSE,stringsAsFactors=FALSE,
+
+                    col.names = c("data_provider","sys_sample_code","sample_name","sample_matrix_code","sample_type_code",
+                                  "sample_source","parent_sample_code","sample_delivery_group","sample_date","sys_loc_code",
+                                  "start_depth","end_depth","depth_unit","chain_of_custody","sent_to_lab_date","sample_receipt_date",
+                                  "sampler","sampling_company_code","sampling_reason","sampling_technique","task_code",
+                                  "collection_quarter","composite_yn","composite_desc","sample_class","custom_field_1","custom_field_2",
+                                  "custom_field_3","comment"))
+
+ 
+  ### Generate site IDs for field data by pulling info from sample_name before 1st "_".
+  # First change all sample_source entries to lower case
+  temp_sample <- temp_sample %>% 
+    mutate(sample_source = tolower(sample_source))
+  
+  #Populate sample IDs for all field data except EBs (to match historic EQuIS data)
+  #Remove QC codes from site IDs
+  # temp_sample$SiteID <- ifelse(temp_sample$sample_source == "field" & !grepl("EB",temp_sample$sample_name), str_extract(temp_sample$sample_name, "[^_]+"),NA) %>%
+  #   str_remove("FB") %>%
+  #   str_remove("QC")
+  temp_sample$SiteID <- ifelse(temp_sample$sample_matrix_code %in% c("WS", "WG"), str_extract(temp_sample$sample_name, "[^_]+"), NA) %>%
+    str_remove("EB") %>%
+    str_remove("FB") %>%
+    str_remove("QC")  
+  
+  # temp_sample$SiteID <- ifelse(temp_sample$sample_matrix_code == "WQ", "LAB_INTERAL", NA) %>%
+  #   str_remove("FB") %>%
+  #   str_remove("QC")  
+  
+
+
+  ##### Locate and code QAQC samples #####
+    ### Add other variants of QAQC sample codes? ###
+    ### Recode below to use lists of matches instead of repasting each block ###
+    ### Better to just pull last three characters of sample ID and look for these? Need to avoids finding these in site names... ###
+
+  # Generate DEC_sample_type field and and populate with EB code as needed. Other records are filled with NA when creating field (first line). 
+    #Must use specific variants for EB including matrix code because of 13-EBCR-16.3
+  temp_sample$sample_type_code <- ifelse(temp_sample$sample_source == "field" & temp_sample$sample_type_code == "N" &
+                                          grepl("EB",temp_sample$sample_name),"EB", temp_sample$sample_type_code)
+  # temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "field" & temp_sample$sample_type_code == "N" &
+  #                                         grepl("EB",temp_sample$sample_name),"EB", temp_sample$DEC_sample_type)
+  
+  # Populate DEC_sample_type for FB samples as needed.
+  temp_sample$sample_type_code <- ifelse(temp_sample$sample_source == "field" &
+                                          grepl("FB",temp_sample$sample_name),"FB",temp_sample$sample_type_code)
+  # temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "field" &
+  #                                         grepl("FB",temp_sample$sample_name),"FB",temp_sample$DEC_sample_type)  
+
+
+  # Populate remaining DEC_sample_type NAs for field data with "N" for normal samples (assumes all remaining NAs are normal samples).
+  # temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "field" & temp_sample$sample_type_code == "N" &
+  #                                         is.na(temp_sample$DEC_sample_type),"N",temp_sample$DEC_sample_type)
+
+  # Convert Lab NAs to "Lab" (better than keeping as NAs to avoid subsetting issues in QAQC script; found that bracket subsetting in a column that contains NAs returns blank/NA rows).
+  # temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "Lab" & 
+  #                                         is.na(temp_sample$DEC_sample_type), "Lab", temp_sample$DEC_sample_type)
+
+  # Count number of each sample type identified and print
+  count.Normal <- length(grep("^N$", temp_sample$sample_type_code))
+  message(paste0(count.Normal," N"))
+  count.EB <- length(grep("^EB$", temp_sample$sample_type_code))
+  message(paste0(count.EB," EB"))
+  count.FB <- length(grep("^FB$", temp_sample$sample_type_code))     # FB only present in Routine Network data
+  message(paste0(count.FB," FB\n"))
+
+
+  ##### Merge sample and result files #####
+    # Must merge by sys_sample_code and not sample_name in order to appropriately associate MS, dissolved samples (sometimes "Diss" or "S" added to end of sys_sample_code), and other lab samples with appropriate results.
+  
+  temp_RSmerge <- merge(temp_sample,temp_result,by="sys_sample_code", all=TRUE)
+
+  filenm <- file.path(output.i,
+                      paste(folder_list[i],"_RSmerge.csv", sep=""))
+
+  if ((nrow(temp_result)) < (nrow(temp_RSmerge))) {
+    stop('SCRIPT STOPPED: Extra records created in merge. Check EDD for errors.')
+  }
+  if ((nrow(temp_result)) > (nrow(temp_RSmerge))) {
+    stop('SCRIPT STOPPED: Not enough records created with merge. Check for errors.')
+  }
+
+  # Create name using EDD and added suffix, and assign to current data frame
+  mergenm <- paste0(folder_list[i], "_RSmerge")
+  mergefile <- assign(mergenm, temp_RSmerge)
+
+  # Do the same for sample file data
+  mergenm.sample <- paste0(folder_list[i], "_Samplemerge")
+  mergefile.sample <- assign(mergenm.sample, temp_sample)
+  
+  # Do the same for result file data
+  mergenm.result <- paste0(folder_list[i], "_Resultmerge")
+  mergefile.result <- assign(mergenm.result, temp_result)
+
+  #Add current data frame to the list of all dataframes
+  RSfile_list[[i]] <- mergefile
+  RSfile_list.sample[[i]] <- mergefile.sample
+  RSfile_list.result[[i]] <- mergefile.result
+
+  # Export each merged EDD as CSVs (use for troubleshooting)
+  # write.table(temp_RSmerge, file=filenm,sep=",", row.names = FALSE)
+  
+  sprintf(folder_list[i],"\n")
+}
+
+#Bind all data frames (merged sample-result files) into one
+RIBSdata = do.call(rbind, RSfile_list)
+RIBSdata.sample = do.call(rbind, RSfile_list.sample)
+RIBSdata.result = do.call(rbind, RSfile_list.result)
+
+# Move new Site ID and DEC Sample Type columns to beginning of data frame
+RIBSdata <- RIBSdata %>% 
+  select(SiteID, sample_type_code, everything())
+RIBSdata.sample <- RIBSdata.sample %>% 
+  select(SiteID, sample_type_code, everything())
+
+RIBSdata.sample.repeats <- RIBSdata.sample %>% 
+  group_by(sys_sample_code) %>% 
+  mutate(n = n()) %>% 
+  filter(n == 2) 
+
+RIBSdata.postjoin <- left_join(RIBSdata.sample, RIBSdata.result, by = "sys_sample_code")
+
+# write.csv(RIBSdata, file= paste0(output.path,"/","2016_RIBSdata_TEST.csv"),sep=",", row.names = FALSE)
+
+```
+
+Summarize data in output
+```{r}
+
+# List unqique sampling dates to verify all present
+sample.dates <- unique(as.Date(RIBSdata.sample$sample_date[RIBSdata.sample$sample_source == "field"], "%m/%d/%Y %H:%M:%S"))
+# sample.dates <- unique(as.Date(RIBSdata.sample$sample_date[RIBSdata.sample$sample_source == "Field"], "%Y-%m-%d %H:%M:%S"))
+message(paste0(length(sample.dates)," unique sample dates present:\n"))
+cat(as.character(sort(sample.dates)), sep = "\n")
+
+### Summarize sample counts to compare to COCs (ensure sure all codes assigned appropriately).
+totalcount.Normal <- length(grep("^N$", RIBSdata.sample$sample_type_code))
+totalcount.EB <- length(grep("^EB$", RIBSdata.sample$sample_type_code))
+totalcount.FB <- length(grep("^FB$", RIBSdata.sample$sample_type_code))     # FB only present in Routine Network data
+
+message(paste0("\nTotal samples identified:\n", totalcount.Normal, " N\n", totalcount.EB, " EB\n", totalcount.FB, " FB (should only be present for Routine)\n" 
+               # ,totalcount.MS, " MS (including lab MSs)\n"
+               ))
+
+if(totalcount.EB == 0){warning(paste0("    WARNING: NO EBs PRESENT\n"))}
+if(totalcount.FB == 0){warning(paste0("    WARNING: NO FBs PRESENT (only required for Routine data)\n"))}
+if(totalcount.FB > 0){warning(paste0("    WARNING: FBs PRESENT (only should be present for Routine data)\n"))}
+
+# Check for ALS reanalyses (could mean duplicate results for one sample/param combination)
+reanalyses <- RIBSdata.result$sys_sample_code[(endsWith(RIBSdata.result$sys_sample_code,"RE"))]
+if(length(reanalyses) > 0){
+  message("\nWARNING: Reanalyses present (possible duplicate results for one sample/param combination): \n",reanalyses)
+} 
+
+
+```
+
+
+
+See if matches for generated site IDs exist in master sites table. If mismatches are found, process into code for copy/pasting into next chunk for correcting. 2nd instance of each site ID (after the ~) to be corrected manually after pasting next chunk.
+# Use RIBSdata.sample (sample list only) to help troubleshoot site ID mismatch issues.
+# Use space at top of this chunk if edits needed before matching site IDs
+```{r echo=TRUE}
+
+# List unique site IDs generated and creat match/mismatch lists
+siteids.present <- unique(RIBSdata.sample$SiteID[!is.na(RIBSdata.sample$SiteID)])
+siteids.mismatch <- siteids.present[!(siteids.present %in% sites.master$RIBS_ID_FOR_SITE_TABLE)]
+siteids.match <- siteids.present[(siteids.present %in% sites.master$RIBS_ID_FOR_SITE_TABLE)]
+
+# See if mismatches exist. If so (else), prepare code for renaming mismatched site IDs and print to console to be pasted into the chunk below. 2nd instance of each site ID (after the ~) to be corrected manually after pasting in chunk below.
+if (length(siteids.mismatch) == 0 & length(siteids.match) > 0) {
+  message("Match found for all ", length(siteids.match), " site IDs.")
+} else{
+  message(length(siteids.present)," unique site IDs generated from sample IDs\n",length(siteids.match), " matches found, ", length(siteids.mismatch), " mismatch(es):\n")
+  siteids.mismatch.code <- paste0("    SiteID == '",siteids.mismatch,"' ~ '",siteids.mismatch,"',")
+  cat(siteids.mismatch.code,sep="\n")
+}
+
+
+```
+
+Checking sites against EQuIS locations table also:
+```{r echo=TRUE}
+
+# List unique site IDs generated and creat match/mismatch lists
+siteids.present_EQ <- unique(RIBSdata.sample$SiteID[!is.na(RIBSdata.sample$SiteID)])
+siteids.mismatch_EQ <- siteids.present_EQ[!(siteids.present_EQ %in% sites.master_equis$SYS_LOC_CODE)]
+siteids.match_EQ <- siteids.present_EQ[(siteids.present_EQ %in% sites.master_equis$SYS_LOC_CODE)]
+
+# See if mismatches exist. If so (else), prepare code for renaming mismatched site IDs and print to console to be pasted into the chunk below. 2nd instance of each site ID (after the ~) to be corrected manually after pasting in chunk below.
+if (length(siteids.mismatch_EQ) == 0 & length(siteids.match_EQ) > 0) {
+  message("Match found for all ", length(siteids.match_EQ), " site IDs.")
+} else{
+  message(length(siteids.present_EQ)," unique site IDs generated from sample IDs\n",length(siteids.match_EQ), " matches found, ", length(siteids.mismatch_EQ), " mismatch(es):\n")
+  siteids.mismatch.code_EQ <- paste0("    SiteID == '",siteids.mismatch_EQ,"' ~ '",siteids.mismatch_EQ,"',")
+  cat(siteids.mismatch.code_EQ,sep="\n")
+}
+
+
+```
+
+
+SiteID and data corrections:
+### Run this chunk only if site ID mismatches found and need to be corrected, or other data corrections needed. ###
+User manually corrects site IDs that couldn't be located in master sites table by pasting the output code from above and correct the 2nd instance of each site ID (after the ~).
+```{r correct_data,echo=TRUE}
+
+# See L:\DOW\SMAS\data\chemistry\historic\2002-2016\2016 EDD processing\2016_missing_siteids.xlsx for details of corrections
+
+RIBSdata.sample.siteids.corr <- RIBSdata.sample %>% 
+  mutate(SiteID = case_when(
+    SiteID == '01051204' ~ '01051214',
+    SiteID == '99999999' ~ 'NA',
+    SiteID == '06010008' ~ '09010008',
+    SiteID == '11010216' ~ '11010215',
+    SiteID == '9010008' ~ '09010008',
+    SiteID == '021067' ~ '01021067',
+    SiteID == '021200' ~ '01021200',
+    SiteID == '013010139' ~ '13010139',
+    SiteID == '010430001' ~ '01043001',
+    SiteID == '12012002c' ~ '12012002C',
+    SiteID == '0501005' ~ '05010005',
+    SiteID == '0701005' ~ '07010005',
+    TRUE ~ SiteID
+    )
+)
+
+### Enter other data corrections here:
+
+# (KEEP THIS CODE COMMENTED HERE AS AN EXAMPLE)
+# Ramapo: There were several 'fraction' values for aluminum that should have been D for dissolved and not T.
+# RIBSdata.siteids.corr <- RIBSdata.siteids.corr %>%
+#   mutate(fraction = case_when(
+#     chemical_name == 'Aluminum' & fraction == 'T' ~ 'D',
+#     TRUE ~ fraction
+#   )
+# )
+
+# Check again for mismatches and print
+siteids.present.corr <- unique(RIBSdata.sample.siteids.corr$SiteID[!is.na(RIBSdata.sample.siteids.corr$SiteID)])
+siteids.mismatch2 <- siteids.present.corr[!(siteids.present.corr %in% sites.master$RIBS_ID_FOR_SITE_TABLE)]
+siteids.match2 <- siteids.present.corr[(siteids.present.corr %in% sites.master$RIBS_ID_FOR_SITE_TABLE)]
+
+if(length(siteids.mismatch2 > 0)){
+  message("The following ", length(siteids.mismatch2), " sites were still not matched:")
+  cat(siteids.mismatch2,sep="\n")
+} else{
+  message("All sites matched!")
+}
+```
+
+
+Separate water and sediment data
+```{r}
+
+RIBSdata.sample.siteids.corr.sed <- RIBSdata.sample.siteids.corr %>% 
+  filter(sample_matrix_code == "SO" | sample_matrix_code == "SQ")
+RIBSdata.result.sed <- RIBSdata.result %>% 
+  filter(lab_matrix_code == "SO" | lab_matrix_code == "SQ")
+
+RIBSdata.sample.siteids.corr.wtr <- RIBSdata.sample.siteids.corr %>% 
+  filter(sample_matrix_code == "WS" | sample_matrix_code == "WQ" | sample_matrix_code == "WG")
+RIBSdata.result.wtr <- RIBSdata.result %>% 
+  filter(lab_matrix_code == "WS" | lab_matrix_code == "WQ" | lab_matrix_code == "WG")
+
+```
+
+Write datasets to CSVs
+```{r}
+
+write.table(RIBSdata.sample.siteids.corr.sed, file= paste0(output.path,"/","2016_sediment_sample_20201106.csv"),sep=",", row.names = FALSE)
+write.table(RIBSdata.result.sed, file= paste0(output.path,"/","2016_sediment_result_20201106.csv"),sep=",", row.names = FALSE)
+
+write.table(RIBSdata.sample.siteids.corr.wtr, file= paste0(output.path,"/","2016_ribs_sample_20201106.csv"),sep=",", row.names = FALSE)
+write.table(RIBSdata.result.wtr, file= paste0(output.path,"/","2016_ribs_result_20201106.csv"),sep=",", row.names = FALSE)
+
+
+```
+
