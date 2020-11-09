@@ -138,6 +138,8 @@ for (i in 1:nfolder_list){
   temp_sample$DEC_sample_type <- ifelse(grepl(" EB",temp_sample$sample_name),"EB",temp_sample$DEC_sample_type)
   temp_sample$DEC_sample_type <- ifelse(grepl("EB_",temp_sample$sample_name),"EB",temp_sample$DEC_sample_type)
   temp_sample$DEC_sample_type <- ifelse(grepl("_EB",temp_sample$sample_name),"EB",temp_sample$DEC_sample_type)
+  temp_sample$DEC_sample_type <- ifelse(grepl("Equipment Blank",temp_sample$sample_name),"EB",temp_sample$DEC_sample_type)
+
 
   # Populate DEC_sample_type for FB samples. (only used in Routine data, where mercury samples exist)
   temp_sample$DEC_sample_type <- ifelse(grepl("-FB",temp_sample$sample_name),"FB",temp_sample$DEC_sample_type)
