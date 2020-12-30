@@ -113,12 +113,15 @@ for (i in 1:nfolder_list){
 
 
   ##### Locate and code QAQC samples #####
-    ### Add other variants of QAQC sample codes? ###
-    ### Recode below to use lists of matches instead of repasting each block ###
-    ### Better to just pull last three characters of sample ID and look for these? Need to avoids finding these in site names... ###
 
   # Generate DEC_sample_type field and and populate with EB code as needed. Other records are filled with NA when creating field (first line). 
     #Must use specific variants for EB including matrix code because of 13-EBCR-16.3
+  
+  
+  
+  #### Currently just adding DEC sample type codes to sampe_type_code field. Will add DEC_sample_type field for data cleaning ###
+  
+  
   temp_sample$sample_type_code <- ifelse(temp_sample$sample_source == "field" & temp_sample$sample_type_code == "N" &
                                           grepl("EB",temp_sample$sample_name),"EB", temp_sample$sample_type_code)
   # temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source == "field" & temp_sample$sample_type_code == "N" &
