@@ -13,13 +13,13 @@ root.dir <- rprojroot::find_root("Chem_raw_processing.Rproj")
 ##### User-defined variables #####
 
 # Must create the directories specified in input.path and output.path #
-input.path <- file.path(root.dir, "data_input", "2020", "CREEQsurvey_chem_all_smas_mohawk_flhub")
-output.path <- file.path(root.dir, "data_output", "2020", "CREEQsurvey_chem_all_smas_mohawk_flhub")
+input.path <- file.path(root.dir, "data_input", "2020", "oneida")
+output.path <- file.path(root.dir, "data_output", "2020", "oneida")
 
-output.filename <- paste0("2020_chem_preqaqc_ALL-smas_mohawk_flhub_", Sys.Date(), ".csv")
-output.sample.filename <- paste0("2020_chem_preqaqc_SAMPLE-smas_mohawk_flhub__", Sys.Date(), ".csv")
-output.result.filename <- paste0("2020_chem_preqaqc_RESULT-smas_mohawk_flhub_", Sys.Date(), ".csv")
-output.batch.filename <- paste0("2020_chem_preqaqc_BATCH-smas_mohawk_flhub_", Sys.Date(), ".csv")
+output.filename <- paste0("2020_chem_preqaqc_ALL-oneida_", Sys.Date(), ".csv")
+output.sample.filename <- paste0("2020_chem_preqaqc_SAMPLE-oneida_", Sys.Date(), ".csv")
+output.result.filename <- paste0("2020_chem_preqaqc_RESULT-oneida_", Sys.Date(), ".csv")
+output.batch.filename <- paste0("2020_chem_preqaqc_BATCH-oneida_", Sys.Date(), ".csv")
 
 #Specify sites reference table
 # sites.master <- read.csv(file.path(root.dir, "data_input/site_tables/20191224_Site_Field_cleaned_final.csv"))
@@ -102,31 +102,37 @@ for (i in 1:nfolder_list){
   
   ##########  Generating site IDs  ##########  
   
-  # Duplicate sample_name field and convert all spaces to dashes before pulling site IDs ###
+  # # Duplicate sample_name field and convert all spaces to dashes before pulling site IDs ###
+  # temp_sample <- temp_sample %>%
+  #   mutate(sample_name_temp = sample_name) %>%
+  #   mutate(sample_name_temp = sub(" ", "-", sample_name_temp))
+  # 
+  # ### Generate site IDs for all non-lab sample data by pulling info from sample_name before 3rd "-".
+  # temp_sample$SITE_ID <- ifelse(temp_sample$sample_matrix_code == "WS|SO",
+  #                              sub("^(([^-]*-){2}[^-]*).*","\\1" , temp_sample$sample_name_temp), NA)
+  # 
+  #   ## Alternative method #2 to generating SITE_ID. Pulls string from before first underscore
+  #   # temp_sample$SITE_ID <- ifelse(temp_sample$sample_matrix_code == "WS",
+  #   #                            str_extract(temp_sample$sample_name_temp, "[^_]+"), NA)
+  # 
+  # ## Alternative method #3 to generating SITE_ID. Pulls string from position after decimal (as expected in river mile). WOrks better for older data:
+  #       ## DOES NOT WORK IF NO DECIMAL PRESENT (some site IDs use -001 as rivermile)
+  #   # temp_sample$SITE_ID <- ifelse(temp_sample$sample_matrix_code == "WS",
+  #   #                            substr(temp_sample$sample_name_temp, 1, as.numeric(gregexpr(pattern ='\\.',temp_sample$sample_name_temp)) + 1), NA)
+  # 
+  # 
+  # # Set Site ID to LAB_INTERNAL for such samples
+  # temp_sample$SITE_ID <- ifelse(temp_sample$sample_matrix_code == "WQ", "LAB_INTERNAL", temp_sample$SITE_ID)
+  # 
+  # # Delete temp column
+  # temp_sample <- temp_sample %>%
+  #   select(-sample_name_temp)
+  
+  
+  # Using sys_loc_code in leiu of pulling from sample_name (above block)
   temp_sample <- temp_sample %>% 
-    mutate(sample_name_temp = sample_name) %>% 
-    mutate(sample_name_temp = sub(" ", "-", sample_name_temp))
-  
-  ### Generate site IDs for all non-lab sample data by pulling info from sample_name before 3rd "-".
-  temp_sample$SITE_ID <- ifelse(temp_sample$sample_matrix_code == "WS|SO",
-                               sub("^(([^-]*-){2}[^-]*).*","\\1" , temp_sample$sample_name_temp), NA)
-
-    ## Alternative method #2 to generating SITE_ID. Pulls string from before first underscore
-    # temp_sample$SITE_ID <- ifelse(temp_sample$sample_matrix_code == "WS",
-    #                            str_extract(temp_sample$sample_name_temp, "[^_]+"), NA)
-    
-  ## Alternative method #3 to generating SITE_ID. Pulls string from position after decimal (as expected in river mile). WOrks better for older data:
-        ## DOES NOT WORK IF NO DECIMAL PRESENT (some site IDs use -001 as rivermile)
-    # temp_sample$SITE_ID <- ifelse(temp_sample$sample_matrix_code == "WS",
-    #                            substr(temp_sample$sample_name_temp, 1, as.numeric(gregexpr(pattern ='\\.',temp_sample$sample_name_temp)) + 1), NA)
-  
-
-  # Set Site ID to LAB_INTERNAL for such samples
-  temp_sample$SITE_ID <- ifelse(temp_sample$sample_matrix_code == "WQ", "LAB_INTERNAL", temp_sample$SITE_ID)
-  
-  # Delete temp column
-  temp_sample <- temp_sample %>% 
-    select(-sample_name_temp)
+    mutate(SITE_ID = ifelse(grepl("-", sys_loc_code), sys_loc_code, "LAB_INTERNAL")) %>% 
+    select(SITE_ID, everything())
   
   ###########################################
   
@@ -335,12 +341,6 @@ User manually corrects site IDs that couldn't be located in master sites table b
 RIBSdata.ALL_corr <- RIBSdata.ALL %>% 
   mutate(SITE_ID_corr = case_when(
     SITE_ID == 'LAB_INTERNAL' ~ 'LAB_INTERNAL',
-    SITE_ID == '15-RAMA-' ~ '15-RAMA-16.8',
-    SITE_ID == '13WALK-60.1-07072020' ~ '13-WALK-60.1',
-    SITE_ID == '07-WAGGS-0.1' ~ '07-WAGG-0.1',
-    SITE_ID == '13-WALK-19.0_090120' ~ '13-WALK-19.0',
-    SITE_ID == '13-WALK-44.4_090120' ~ '13-WALK-44.4',
-    SITE_ID == '13-WALK-60.1_090120' ~ '13-WALK-60.1',
     TRUE ~ SITE_ID
   )
   ) %>% 
@@ -354,12 +354,6 @@ RIBSdata.ALL_corr <- RIBSdata.ALL %>%
 RIBSdata.sample_corr <- RIBSdata.sample %>% 
   mutate(SITE_ID_corr = case_when(
     SITE_ID == 'LAB_INTERNAL' ~ 'LAB_INTERNAL',
-    SITE_ID == '15-RAMA-' ~ '15-RAMA-16.8',
-    SITE_ID == '13WALK-60.1-07072020' ~ '13-WALK-60.1',
-    SITE_ID == '07-WAGGS-0.1' ~ '07-WAGG-0.1',
-    SITE_ID == '13-WALK-19.0_090120' ~ '13-WALK-19.0',
-    SITE_ID == '13-WALK-44.4_090120' ~ '13-WALK-44.4',
-    SITE_ID == '13-WALK-60.1_090120' ~ '13-WALK-60.1',
     TRUE ~ SITE_ID
     )
   ) %>% 
@@ -392,24 +386,6 @@ if(length(siteids.mismatch2 > 0)){
   message("All sites matched!")
 }
 ```
-
-Subset data to Charlie's site list (those with CREEQ surveys)
-```{r, eval = FALSE}
-crsurvey.sites <- readxl::read_excel(file.path(root.dir, "data_input/2020/20210212_Edit_Filtered_DEC_Creeq_UP_events.xlsx")) %>% 
-  distinct(SITE_HISTORY_ID)
-
-RIBSdata.ALL_corr.crsurvey <- RIBSdata.ALL_corr %>% 
-  filter(SITE_ID %in% crsurvey.sites$SITE_HISTORY_ID,
-         DEC_sample_type %in% "N",
-         sample_source %in% "Field") %>% 
-  select(SITE_ID, sys_sample_code, sample_delivery_group, sample_date, fraction, chemical_name, result_value, result_unit, reportable_result, detect_flag, lab_qualifiers, interpreted_qualifiers, method_detection_limit, reporting_detection_limit, quantitation_limit, detection_limit_unit, minimum_detectable_conc)
-
-RIBSdata.ALL_corr.crsurvey.unique <- lapply(RIBSdata.ALL_corr.crsurvey, unique)
-
-write.table(RIBSdata.ALL_corr.crsurvey, file= paste0(output.path,"/","2020_chem_preqaqc_CREEQ_REQUEST_", Sys.Date(), ".csv"),sep=",", row.names = FALSE)
-
-```
-
 
 
 Additional edits and Write final tables to CSV (Remember to copy report or Rmd to output dir)

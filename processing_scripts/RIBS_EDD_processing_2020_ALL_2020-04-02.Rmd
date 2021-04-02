@@ -8,28 +8,48 @@ output: html_document
 Load libraries, find the R-project root directory, and specify input/output files.
 ```{r}
 library(tidyverse)
+library(readxl)
 root.dir <- rprojroot::find_root("Chem_raw_processing.Rproj")
 
 ##### User-defined variables #####
 
 # Must create the directories specified in input.path and output.path #
-input.path <- file.path(root.dir, "data_input", "2020", "CREEQsurvey_chem_all_smas_mohawk_flhub")
-output.path <- file.path(root.dir, "data_output", "2020", "CREEQsurvey_chem_all_smas_mohawk_flhub")
+input.path <- file.path(root.dir, "data_input", "2020", "all")
+output.path <- file.path(root.dir, "data_output", "2020", "all")
 
-output.filename <- paste0("2020_chem_preqaqc_ALL-smas_mohawk_flhub_", Sys.Date(), ".csv")
-output.sample.filename <- paste0("2020_chem_preqaqc_SAMPLE-smas_mohawk_flhub__", Sys.Date(), ".csv")
-output.result.filename <- paste0("2020_chem_preqaqc_RESULT-smas_mohawk_flhub_", Sys.Date(), ".csv")
-output.batch.filename <- paste0("2020_chem_preqaqc_BATCH-smas_mohawk_flhub_", Sys.Date(), ".csv")
+output.filename <- paste0("2020_chem_preqaqc_JOIN-ALL_", Sys.Date(), ".csv")
+output.sample.filename <- paste0("2020_chem_preqaqc_SAMPLE-ALL_", Sys.Date(), ".csv")
+output.result.filename <- paste0("2020_chem_preqaqc_RESULT-ALL_", Sys.Date(), ".csv")
+output.batch.filename <- paste0("2020_chem_preqaqc_BATCH-ALL_", Sys.Date(), ".csv")
 
 #Specify sites reference table
 # sites.master <- read.csv(file.path(root.dir, "data_input/site_tables/20191224_Site_Field_cleaned_final.csv"))
-sites.master <- readxl::read_excel(file.path(root.dir, "data_input/site_tables/2020_05_01_S_Site.xlsx")) %>% 
+sites.master <- read_excel(file.path(root.dir, "data_input/site_tables/2020_05_01_S_Site.xlsx")) %>% 
   rename(BAS_LOC_RM = SITE_HISTORY_ID)
 
 
 ##################################
 
 ```
+
+```{r EDD completeness check}
+
+edds.present <- list.dirs(path = input.path, full.names = FALSE, recursive = TRUE) %>% 
+  as.data.frame() %>% 
+  rename(SDG = ".")
+
+als.proj.list <- read_excel(file.path("L:/DOW/SMAS/data/chemistry/raw_lab_edds/2020", "nysdec 2020_Janice_ALS_proj_list_2021-02-12.xlsx"), sheet = "SMAS") %>% 
+  janitor::clean_names() %>% 
+  filter(project_dec != "ESF CREEQ") %>% 
+  rename(SDG = folder_number)
+
+edds.missing <- anti_join(edds.present, als.proj.list, by = "SDG")
+edds.missing.2 <- anti_join(als.proj.list, edds.present, by = "SDG")
+
+# ALL PRESENT EXCEPT R2000546, which is for sediment samples taken by a region (Rondout Creek, Rosen/RRS 19)
+
+```
+
 
 Main process
 ```{r}
