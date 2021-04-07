@@ -43,13 +43,12 @@ als.proj.list <- read_excel(file.path("L:/DOW/SMAS/data/chemistry/raw_lab_edds/2
   filter(project_dec != "ESF CREEQ") %>% 
   rename(SDG = folder_number)
 
-edds.missing <- anti_join(edds.present, als.proj.list, by = "SDG")
-edds.missing.2 <- anti_join(als.proj.list, edds.present, by = "SDG")
+edds.extra <- anti_join(edds.present, als.proj.list, by = "SDG")
+edds.missing <- anti_join(als.proj.list, edds.present, by = "SDG")
 
 # ALL PRESENT EXCEPT R2000546, which is for sediment samples taken by a region (Rondout Creek, Rosen/RRS 19)
 
 ```
-
 
 Main process
 ```{r}
@@ -128,7 +127,7 @@ for (i in 1:nfolder_list){
     mutate(sample_name_temp = sub(" ", "-", sample_name_temp))
   
   ### Generate site IDs for all non-lab sample data by pulling info from sample_name before 3rd "-".
-  temp_sample$SITE_ID <- ifelse(temp_sample$sample_matrix_code == "WS|SO",
+  temp_sample$SITE_ID <- ifelse(temp_sample$sample_matrix_code == "WS",
                                sub("^(([^-]*-){2}[^-]*).*","\\1" , temp_sample$sample_name_temp), NA)
 
     ## Alternative method #2 to generating SITE_ID. Pulls string from before first underscore
@@ -174,25 +173,26 @@ for (i in 1:nfolder_list){
   
   
   # Populate DEC_sample_type for N_DUPPARENT cells by locating DUP samples and finding parent sample by removing DUP code. 
-  dup.vec <- temp_sample$sample_name[grepl("-[Ss][Ee][Qq]", temp_sample$sample_name)]
+  # Updated 4/7/21 to perform on sys_sample_code instead of sample_name in case reanalyses present (was causing to fail).
+  dup.vec <- temp_sample$sys_sample_code[grepl("-[Ss][Ee][Qq]", temp_sample$sys_sample_code)]
   parent.vec <- gsub("-[Ss][Ee][Qq]", "", dup.vec)
-  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_name %in% parent.vec,"N_DUPPARENT",temp_sample$DEC_sample_type)
+  temp_sample$DEC_sample_type <- ifelse(temp_sample$sys_sample_code %in% parent.vec,"N_DUPPARENT",temp_sample$DEC_sample_type)
   
-  dup.vec <- temp_sample$sample_name[grepl(" [Ss][Ee][Qq]", temp_sample$sample_name)]
+  dup.vec <- temp_sample$sys_sample_code[grepl(" [Ss][Ee][Qq]", temp_sample$sys_sample_code)]
   parent.vec <- gsub(" [Ss][Ee][Qq]", "", dup.vec)
-  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_name %in% parent.vec,"N_DUPPARENT",temp_sample$DEC_sample_type)
+  temp_sample$DEC_sample_type <- ifelse(temp_sample$sys_sample_code %in% parent.vec,"N_DUPPARENT",temp_sample$DEC_sample_type)
   
-  dup.vec <- temp_sample$sample_name[grepl("WS[Ss][Ee][Qq]", temp_sample$sample_name)]
+  dup.vec <- temp_sample$sys_sample_code[grepl("WS[Ss][Ee][Qq]", temp_sample$sys_sample_code)]
   parent.vec <- gsub("WS[Ss][Ee][Qq]", "WS", dup.vec)
-  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_name %in% parent.vec,"N_DUPPARENT",temp_sample$DEC_sample_type)
+  temp_sample$DEC_sample_type <- ifelse(temp_sample$sys_sample_code %in% parent.vec,"N_DUPPARENT",temp_sample$DEC_sample_type)
   
-  dup.vec <- temp_sample$sample_name[grepl("W[Ss][Ee][Qq]", temp_sample$sample_name)]
+  dup.vec <- temp_sample$sys_sample_code[grepl("W[Ss][Ee][Qq]", temp_sample$sys_sample_code)]
   parent.vec <- gsub("W[Ss][Ee][Qq]", "W", dup.vec)
-  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_name %in% parent.vec,"N_DUPPARENT",temp_sample$DEC_sample_type)
+  temp_sample$DEC_sample_type <- ifelse(temp_sample$sys_sample_code %in% parent.vec,"N_DUPPARENT",temp_sample$DEC_sample_type)
 
-  dup.vec <- temp_sample$sample_name[grepl("[Ss][Ee][Qq]_", temp_sample$sample_name)]
+  dup.vec <- temp_sample$sys_sample_code[grepl("[Ss][Ee][Qq]_", temp_sample$sys_sample_code)]
   parent.vec <- gsub("[Ss][Ee][Qq]_", "_", dup.vec)
-  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_name %in% parent.vec,"N_DUPPARENT",temp_sample$DEC_sample_type)
+  temp_sample$DEC_sample_type <- ifelse(temp_sample$sys_sample_code %in% parent.vec,"N_DUPPARENT",temp_sample$DEC_sample_type)
 
   # Identify internal lab samples in DEC_sample_type_field
   temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_matrix_code == "WQ", "LAB_INTERNAL", temp_sample$DEC_sample_type)  
@@ -298,7 +298,7 @@ totalcount.MS <- length(RIBSdata.sample$DEC_sample_type[RIBSdata.sample$sample_s
 totalcount.MSD <- length(RIBSdata.sample$DEC_sample_type[RIBSdata.sample$sample_source == "Lab" & RIBSdata.sample$sample_type_code == "SD"]) 
 totalcount.LR <- length(RIBSdata.sample$DEC_sample_type[RIBSdata.sample$sample_source == "Lab" & RIBSdata.sample$sample_type_code == "LR"]) 
 
-message(paste0("\nTotal samples identified (+1 for each subcontracted sample :\n", 
+message(paste0("\nTotal samples identified (+1 for each subcontracted sample :)\n", 
                totalcount.Normal, " N\n", 
                totalcount.N_DUPPARENT, " N_DUPPARENT\n", 
                totalcount.DUP, " DUP\n",  
@@ -313,13 +313,13 @@ if(totalcount.DUP == 0){warning(paste0("    WARNING: NO DUPLICATES PRESENT\n"))}
 if(totalcount.N_DUPPARENT == 0){warning(paste0("    WARNING: NO DUP PARENTS PRESENT\n"))}
 if(totalcount.EB == 0){warning(paste0("    WARNING: NO EBs PRESENT\n"))}
 if(totalcount.FB == 0){warning(paste0("    WARNING: NO FBs PRESENT (only required for Routine data)\n"))}
-if(totalcount.FB > 0){warning(paste0("    WARNING: FBs PRESENT (only should be present for Routine data)\n"))}
+# if(totalcount.FB > 0){warning(paste0("    WARNING: FBs PRESENT (only should be present for Routine data)\n"))}
 if(totalcount.MS == 0){warning(paste0("    WARNING: NO MSs PRESENT\n"))}
 
 # Check for ALS reanalyses (could mean duplicate results for one sample/param combination)
 reanalyses <- RIBSdata.ALL$sys_sample_code[(endsWith(RIBSdata.ALL$sys_sample_code,"RE"))]
 if(length(reanalyses) > 0){
-  message("\nWARNING: Reanalyses present (possible duplicate results for one sample/param combination): \n",reanalyses)
+  message("\nWARNING: Reanalyses present (possible duplicate results for one sample/param combination): \n\n",cat(reanalyses, sep = "\n"))
 } 
 
 ```
@@ -413,26 +413,15 @@ if(length(siteids.mismatch2 > 0)){
 }
 ```
 
-Subset data to Charlie's site list (those with CREEQ surveys)
-```{r, eval = FALSE}
-crsurvey.sites <- readxl::read_excel(file.path(root.dir, "data_input/2020/20210212_Edit_Filtered_DEC_Creeq_UP_events.xlsx")) %>% 
-  distinct(SITE_HISTORY_ID)
 
-RIBSdata.ALL_corr.crsurvey <- RIBSdata.ALL_corr %>% 
-  filter(SITE_ID %in% crsurvey.sites$SITE_HISTORY_ID,
-         DEC_sample_type %in% "N",
-         sample_source %in% "Field") %>% 
-  select(SITE_ID, sys_sample_code, sample_delivery_group, sample_date, fraction, chemical_name, result_value, result_unit, reportable_result, detect_flag, lab_qualifiers, interpreted_qualifiers, method_detection_limit, reporting_detection_limit, quantitation_limit, detection_limit_unit, minimum_detectable_conc)
+```{r sample completeness check}
 
-RIBSdata.ALL_corr.crsurvey.unique <- lapply(RIBSdata.ALL_corr.crsurvey, unique)
-
-write.table(RIBSdata.ALL_corr.crsurvey, file= paste0(output.path,"/","2020_chem_preqaqc_CREEQ_REQUEST_", Sys.Date(), ".csv"),sep=",", row.names = FALSE)
+# join with project list for names and count samples and presence of QC (mainly to ensure each project or routine team has sufficient QC samples)
 
 ```
 
 
-
-Additional edits and Write final tables to CSV (Remember to copy report or Rmd to output dir)
+Write final tables to CSV (Remember to copy report or Rmd to output dir)
 ```{r}
 
 # Export sample table
