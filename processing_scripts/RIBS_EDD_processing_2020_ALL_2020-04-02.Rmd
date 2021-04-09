@@ -127,7 +127,7 @@ for (i in 1:nfolder_list){
     mutate(sample_name_temp = sub(" ", "-", sample_name_temp))
   
   ### Generate site IDs for all non-lab sample data by pulling info from sample_name before 3rd "-".
-  temp_sample$SITE_ID <- ifelse(temp_sample$sample_matrix_code == "WS",
+  temp_sample$SITE_ID <- ifelse(temp_sample$sample_matrix_code %in% c("WS", "SO"),
                                sub("^(([^-]*-){2}[^-]*).*","\\1" , temp_sample$sample_name_temp), NA)
 
     ## Alternative method #2 to generating SITE_ID. Pulls string from before first underscore
@@ -330,6 +330,14 @@ See if matches for generated site IDs exist in master sites table. If mismatches
 ```{r echo=TRUE}
 ########################
 
+# Import 2020 sites and join to sites master for a unique list
+sites.2020 <- read_excel(file.path(root.dir, "fielddata_for_crosscheck/20210309_S_Sample_Event_Info_field_all_fields_Charlie-2021-03-20.xlsx")) %>%
+  rename(BAS_LOC_RM = SEIH_EVENT_SMAS_HISTORY_ID) %>% 
+  distinct(BAS_LOC_RM)
+sites.master <- sites.master %>% 
+  bind_rows(sites.2020) %>% 
+  distinct(BAS_LOC_RM)
+
 # List unique site IDs generated and creat match/mismatch lists
 siteids.present <- unique(RIBSdata.ALL$SITE_ID[!is.na(RIBSdata.ALL$SITE_ID)])
 siteids.mismatch <- siteids.present[!(siteids.present %in% sites.master$BAS_LOC_RM)]
@@ -350,14 +358,19 @@ if (length(siteids.mismatch) == 0 & length(siteids.match) > 0) {
 ```
 
 SITE_ID and data corrections:
+Run as many times as needed until all corrected.
 User manually corrects site IDs that couldn't be located in master sites table by pasting the output code from above and correct the 2nd instance of each site ID (after the ~).
 ```{r correct_data,echo=TRUE}
 RIBSdata.ALL_corr <- RIBSdata.ALL %>% 
   mutate(SITE_ID_corr = case_when(
     SITE_ID == 'LAB_INTERNAL' ~ 'LAB_INTERNAL',
-    SITE_ID == '15-RAMA-' ~ '15-RAMA-16.8',
+    SITE_ID == '15-RAMA-' ~ '15-RAMA-16.8',  #ALS error; Extra dash added.
     SITE_ID == '13WALK-60.1-07072020' ~ '13-WALK-60.1',
-    SITE_ID == '07-WAGGS-0.1' ~ '07-WAGG-0.1',
+    SITE_ID == '13-LMOHE-P' ~ '13-LMOHE-0.0',  # Updated to match LMAS site ID. 
+    SITE_ID == '13-LPEAC-P' ~ '13-LPEAC-0.0',  # Updated to match LMAS site ID. 
+    SITE_ID == '13-LPNAM-P' ~ '13-LPNAM-0.0',  # Updated to match LMAS site ID. 
+    SITE_ID == '07-WAGGS-0.1' ~ '07-WAGG-0.1',  # ALS error; Extra 'S' added. 
+    SITE_ID == '03-SKIN_T5-0.5' ~ '03-SKIN_T5-0.5', # ALS error; RM 0.2 on COC. 
     SITE_ID == '13-WALK-19.0_090120' ~ '13-WALK-19.0',
     SITE_ID == '13-WALK-44.4_090120' ~ '13-WALK-44.4',
     SITE_ID == '13-WALK-60.1_090120' ~ '13-WALK-60.1',
@@ -374,9 +387,13 @@ RIBSdata.ALL_corr <- RIBSdata.ALL %>%
 RIBSdata.sample_corr <- RIBSdata.sample %>% 
   mutate(SITE_ID_corr = case_when(
     SITE_ID == 'LAB_INTERNAL' ~ 'LAB_INTERNAL',
-    SITE_ID == '15-RAMA-' ~ '15-RAMA-16.8',
+    SITE_ID == '15-RAMA-' ~ '15-RAMA-16.8',  #ALS error; Extra dash added.
     SITE_ID == '13WALK-60.1-07072020' ~ '13-WALK-60.1',
-    SITE_ID == '07-WAGGS-0.1' ~ '07-WAGG-0.1',
+    SITE_ID == '13-LMOHE-P' ~ '13-LMOHE-0.0',  # Updated to match LMAS site ID. 
+    SITE_ID == '13-LPEAC-P' ~ '13-LPEAC-0.0',  # Updated to match LMAS site ID. 
+    SITE_ID == '13-LPNAM-P' ~ '13-LPNAM-0.0',  # Updated to match LMAS site ID. 
+    SITE_ID == '07-WAGGS-0.1' ~ '07-WAGG-0.1',  # ALS error; Extra 'S' added. 
+    SITE_ID == '03-SKIN_T5-0.5' ~ '03-SKIN_T5-0.5', # ALS error; RM 0.2 on COC. 
     SITE_ID == '13-WALK-19.0_090120' ~ '13-WALK-19.0',
     SITE_ID == '13-WALK-44.4_090120' ~ '13-WALK-44.4',
     SITE_ID == '13-WALK-60.1_090120' ~ '13-WALK-60.1',
