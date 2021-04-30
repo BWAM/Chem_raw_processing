@@ -370,7 +370,7 @@ RIBSdata.ALL_corr <- RIBSdata.ALL %>%
     SITE_ID == '13-LPEAC-P' ~ '13-LPEAC-0.0',  # Updated to match LMAS site ID. 
     SITE_ID == '13-LPNAM-P' ~ '13-LPNAM-0.0',  # Updated to match LMAS site ID. 
     SITE_ID == '07-WAGGS-0.1' ~ '07-WAGG-0.1',  # ALS error; Extra 'S' added. 
-    SITE_ID == '03-SKIN_T5-0.5' ~ '03-SKIN_T5-0.5', # ALS error; RM 0.2 on COC. 
+    SITE_ID == '03-SKIN_T5-0.5' ~ '03-SKIN_T5-0.2', # ALS error; RM 0.2 on COC. 
     SITE_ID == '13-WALK-19.0_090120' ~ '13-WALK-19.0',
     SITE_ID == '13-WALK-44.4_090120' ~ '13-WALK-44.4',
     SITE_ID == '13-WALK-60.1_090120' ~ '13-WALK-60.1',
@@ -393,7 +393,7 @@ RIBSdata.sample_corr <- RIBSdata.sample %>%
     SITE_ID == '13-LPEAC-P' ~ '13-LPEAC-0.0',  # Updated to match LMAS site ID. 
     SITE_ID == '13-LPNAM-P' ~ '13-LPNAM-0.0',  # Updated to match LMAS site ID. 
     SITE_ID == '07-WAGGS-0.1' ~ '07-WAGG-0.1',  # ALS error; Extra 'S' added. 
-    SITE_ID == '03-SKIN_T5-0.5' ~ '03-SKIN_T5-0.5', # ALS error; RM 0.2 on COC. 
+    SITE_ID == '03-SKIN_T5-0.5' ~ '03-SKIN_T5-0.2', # ALS error; RM 0.2 on COC. 
     SITE_ID == '13-WALK-19.0_090120' ~ '13-WALK-19.0',
     SITE_ID == '13-WALK-44.4_090120' ~ '13-WALK-44.4',
     SITE_ID == '13-WALK-60.1_090120' ~ '13-WALK-60.1',
