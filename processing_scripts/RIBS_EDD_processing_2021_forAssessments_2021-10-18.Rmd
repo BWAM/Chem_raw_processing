@@ -391,6 +391,7 @@ RIBSdata.ALL_corr <- RIBSdata.ALL %>%
     SITE_ID == '07-DEAN-0.1' ~ '07-DEAN-1.9',
     SITE_ID == '07-FISC-0.1' ~ '07-FISC-1.3',
     SITE_ID == '07-VENS-1.8' ~ '07-VENE-1.5',
+    SITE_ID == '07-FLCK-0.4' ~ '07-FLRN-5.0',
     SITE_ID == '11-CALA-1.0' ~ '11-UHUD-313.2', # Double check this one!
     SITE_ID == '11-XHR-296.0' ~ '11-UHUD-296.7',
     SITE_ID == '11-XHR-286.6' ~ '11-UHUD-286.0',
@@ -398,6 +399,7 @@ RIBSdata.ALL_corr <- RIBSdata.ALL %>%
     SITE_ID == '07-LIME-13.0' ~ '07-LIME-13.0',
     SITE_ID == '07-SRAG-8.0' ~ '07-SRAG-7.0',
     SITE_ID == '02-WFREN_T12-0.2' ~ '02-WFREN_T12-0.5',
+    SITE_ID == '02-CLER_T6-3.1' ~ '02-TWTY-3.1',
     TRUE ~ SITE_ID
   )
   ) %>% 
@@ -427,6 +429,7 @@ RIBSdata.sample_corr <- RIBSdata.sample %>%
     SITE_ID == '07-DEAN-0.1' ~ '07-DEAN-1.9',
     SITE_ID == '07-FISC-0.1' ~ '07-FISC-1.3',
     SITE_ID == '07-VENS-1.8' ~ '07-VENE-1.5',
+    SITE_ID == '07-FLCK-0.4' ~ '07-FLRN-5.0',
     SITE_ID == '11-CALA-1.0' ~ '11-UHUD-313.2', # Double check this one!
     SITE_ID == '11-XHR-296.0' ~ '11-UHUD-296.7',
     SITE_ID == '11-XHR-286.6' ~ '11-UHUD-286.0',
@@ -434,6 +437,7 @@ RIBSdata.sample_corr <- RIBSdata.sample %>%
     SITE_ID == '07-LIME-13.0' ~ '07-LIME-13.0',
     SITE_ID == '07-SRAG-8.0' ~ '07-SRAG-7.0',
     SITE_ID == '02-WFREN_T12-0.2' ~ '02-WFREN_T12-0.5',
+    SITE_ID == '02-CLER_T6-3.1' ~ '02-TWTY-3.1',
     TRUE ~ SITE_ID
     )
   ) %>% 
@@ -467,14 +471,57 @@ if(length(siteids.mismatch2 > 0)){
 
 ```{r splitting out allegheny by team (SDGs not split by team)}
 
-sites.2021 <- read_excel(file.path(root.dir, "data_input/site_tables/c20211006_SEI_Simplified_W_Adjusted_ID_created20212018.xlsx")) %>% 
-  select(SEIH_EVENT_SMAS_HISTORY_ID, SEIH_CREW) %>% 
-  rename(SITE_ID = SEIH_EVENT_SMAS_HISTORY_ID)
+surveys.2021 <- read_excel(file.path(root.dir, "data_input/site_tables/c20211006_SEI_Simplified_W_Adjusted_ID_created20212018.xlsx")) %>% 
+  select(SEIH_EVENT_SMAS_HISTORY_ID, SAMPLE_TEAM, SEIH_CREW, PROJECT_TYPE, PROJECT_NAME, SEIH_EVENT_SMAS_SAMPLE_DATE) %>% 
+  rename(SITE_ID = SEIH_EVENT_SMAS_HISTORY_ID,
+         DATE = SEIH_EVENT_SMAS_SAMPLE_DATE) %>% 
+  filter(PROJECT_TYPE %in% "RIBS_Scr") %>% 
+  mutate(DATE = as.Date(DATE)) %>% 
+  filter(DATE >= "2021-09-14",
+         !(SAMPLE_TEAM %in% "FL"))
 
 samp.alleg <- RIBSdata.sample_corr %>% 
   filter(sample_delivery_group %in% c("R2109618", "R2109607", "R2109606", "R2109605", "R2109583", "R2109582", "R2109702")) %>% 
-  filter(!(SITE_ID %in% "00-QAQC-0.0")) %>% 
-  left_join(sites.2021)
+  filter(!(SITE_ID %in% "00-QAQC-0.0"),
+         sample_type_code %in% "N")
+  
+surveys.2021.chem <- surveys.2021 %>% 
+  inner_join(samp.alleg) %>% 
+  select(sample_delivery_group, everything())
+
+# Review team/sdg association
+test <- surveys.2021.chem %>% 
+  filter(SAMPLE_TEAM %in% "CO1")
+cat("CO1")
+unique(test$sample_delivery_group)
+test <- surveys.2021.chem %>% 
+  filter(SAMPLE_TEAM %in% "CO2")
+cat("CO2")
+unique(test$sample_delivery_group)
+test <- surveys.2021.chem %>% 
+  filter(SAMPLE_TEAM %in% "CO3")
+cat("CO3")
+unique(test$sample_delivery_group)
+test <- surveys.2021.chem %>% 
+  filter(SAMPLE_TEAM %in% "CO4")
+cat("CO4")
+unique(test$sample_delivery_group)
+# Conclusion: SDGs not separated by team at all, but probably by receipt date.
+
+team.site <- surveys.2021.chem %>% 
+  select(SITE_ID, SAMPLE_TEAM)
+
+# Create new SDG_Team column for Allegheny SGDs for proper QC association by team. Use team number for alleg. and keep SDG numbers for all others.
+RIBSdata.ALL_corr <- RIBSdata.ALL_corr %>% 
+  left_join(team.site) %>% 
+  mutate(SDG_team = ifelse(sample_delivery_group %in% c("R2109618", "R2109607", "R2109606", "R2109605", "R2109583", "R2109582", "R2109702"),
+                           SAMPLE_TEAM,
+                           sample_delivery_group)
+  ) %>% 
+  mutate(SDG_team = ifelse(is.na(SDG_team), sample_delivery_group, SDG_team)) %>% 
+  select(SDG_team, sample_delivery_group, SAMPLE_TEAM, everything()) %>% 
+  select(-SAMPLE_TEAM)
+
 
 ```
 
