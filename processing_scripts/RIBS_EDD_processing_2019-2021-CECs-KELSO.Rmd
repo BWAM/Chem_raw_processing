@@ -329,26 +329,6 @@ if(length(reanalyses) > 0){
 
 ```
 
-```{r Completeness check}
-
-k.2019 <- RIBSdata.sample %>% 
-  filter(grepl("2019", sample_date)) %>% 
-  distinct(SITE_ID)
-
-k.2021apr <- RIBSdata.sample %>% 
-  filter(!grepl("2019", sample_date),
-         grepl("04/", sample_date)) %>% 
-  distinct(SITE_ID)
-
-k.2021aug <- RIBSdata.sample %>% 
-  filter(!grepl("2019", sample_date),
-         grepl("08/", sample_date)) %>% 
-  distinct(SITE_ID)
-
-
-```
-
-
 See if matches for generated site IDs exist in master sites table. If mismatches are found, process into code for copy/pasting into next chunk for correcting. 2nd instance of each site ID (after the ~) to be corrected manually after pasting next chunk.
 # Use RIBSdata.sample (sample list only) to help troubleshoot site ID mismatch issues.
 # Use space at top of this chunk if edits needed before matching site IDs
@@ -424,17 +404,73 @@ if(length(siteids.mismatch2 > 0)){
 }
 ```
 
+```{r Completeness check}
+
+# Apply project names based on SDG
+joblist <- read_excel(file.path("C:/Users/gmlemley/New York State Office of Information Technology Services/BWAM - ALS/2021/kelso/job_list", "dec_kelso_joblist.xlsx")) %>% 
+  select(sample_delivery_group, Project, Team)
+
+# Return missing EDDs from project list
+joblist.missing <- joblist %>% 
+  filter(!sample_delivery_group %in% RIBSdata.sample$sample_delivery_group)
+
+sample.proj <- RIBSdata.sample %>% 
+  left_join(joblist) %>% 
+  select(Project, Team, everything()) %>% 
+  filter(sample_source %in% "Field")
+
+sample.ribs <- sample.proj %>% 
+  filter(grepl("Routine", Project))
+sample.meth <- sample.proj %>% 
+  filter(grepl("Methods", Project))
+
+k.2019 <- sample.ribs %>% 
+  filter(grepl("2019", sample_date),
+         # sample_source %in% "Field",
+         DEC_sample_type %in% "N") 
+
+k.2021apr <- sample.ribs %>% 
+  filter(!grepl("2019", sample_date),
+         grepl("04/", sample_date),
+         # sample_source %in% "Field",
+         DEC_sample_type %in% "N")  
+
+k.2021aug <- sample.ribs %>% 
+  filter(!grepl("2019", sample_date),
+         grepl("08/", sample_date),
+         # sample_source %in% "Field",
+         DEC_sample_type %in% "N")  
+
+# Return missing sites from 2021 sampling
+k.2021apr.missing <- sites.routine %>% 
+  filter(!SITE_ID %in% k.2021apr$SITE_ID)
+k.2021aug.missing <- sites.routine %>% 
+  filter(!SITE_ID %in% k.2021aug$SITE_ID)
+```
+
+
 Write final tables to CSV (Remember to copy report or Rmd to output dir)
 ```{r}
 
-# Export sample table
-write.table(RIBSdata.sample_corr, file= paste0(output.path,"/",output.sample.filename),sep=",", row.names = FALSE)
+# Apply project names based on SDG
+joblist <- read_excel(file.path("C:/Users/gmlemley/New York State Office of Information Technology Services/BWAM - ALS/2021/kelso/job_list", "dec_kelso_joblist.xlsx")) %>% 
+  select(sample_delivery_group, Project, Team)
 
-# Export results table
-write.table(RIBSdata.result, file= paste0(output.path,"/",output.result.filename),sep=",", row.names = FALSE)
+# Join and filter to just field samples for Nikki's analysis 
 
-# Export batch table
-write.table(RIBSdata.batch, file= paste0(output.path,"/",output.batch.filename),sep=",", row.names = FALSE)
+RIBSdata.ALL_corr.proj <- RIBSdata.ALL_corr %>% 
+  left_join(joblist) %>% 
+  select(Project, Team, everything()) %>% 
+  filter(sample_source %in% "Field")
+
+# # Export sample table
+# write.table(RIBSdata.sample_corr.proj, file= paste0(output.path,"/",output.sample.filename),sep=",", row.names = FALSE)
+# 
+# # Export results table
+# write.table(RIBSdata.result, file= paste0(output.path,"/",output.result.filename),sep=",", row.names = FALSE)
+# 
+# # Export batch table
+# write.table(RIBSdata.batch, file= paste0(output.path,"/",output.batch.filename),sep=",", row.names = FALSE)
 
 # Export pre-joined table (for running through QAQC script)
 write.table(RIBSdata.ALL_corr, file= paste0(output.path,"/",output.filename),sep=",", row.names = FALSE)
