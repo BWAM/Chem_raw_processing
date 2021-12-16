@@ -13,20 +13,21 @@ root.dir <- rprojroot::find_root("Chem_raw_processing.Rproj")
 
 ##### User-defined variables #####
 
-proj_name <- "cecs_kelso_2019-2021"    # use only lowercase with underscores as spaces"
+proj_name <- "PFAS_2019-2021"    # use only lowercase with underscores as spaces"
 # Need to manually create folders with this name in each "input" and "output" folders
 proj_year <- "2021"
 
 ##################################
 
 
-input.path <- file.path(root.dir, "data_input", proj_year, proj_name)
+# input.path <- file.path(root.dir, "data_input", proj_year, proj_name)
+input.path <- file.path("C:/Users/gmlemley/New York State Office of Information Technology Services/BWAM - TestAmerica/2021/routine_pfas/")
 output.path <- file.path(root.dir, "data_output", proj_year, proj_name)
 
 output.filename <- paste0("chem_preqaqc_JOIN-", proj_name, "_", Sys.Date(), ".csv")
 output.sample.filename <- paste0("chem_preqaqc_SAMPLE-", proj_name, "_", Sys.Date(), ".csv")
 output.result.filename <- paste0("chem_preqaqc_RESULT-", proj_name, "_", Sys.Date(), ".csv")
-output.batch.filename <- paste0("chem_preqaqc_BATCH-", proj_name, "_", Sys.Date(), ".csv")
+# output.batch.filename <- paste0("chem_preqaqc_BATCH-", proj_name, "_", Sys.Date(), ".csv")
 
 #Specify sites reference table
 # sites.master <- read_excel("C:/Users/gmlemley/New York State Office of Information Technology Services/SMAS - Streams Data Modernization/Cleaned Files/Final_Sites_ITS/20210608_S_Site_all_fields.xlsx") %>% 
@@ -64,7 +65,7 @@ nfolder_list = length(folder_list)
 RSfile_list <- list()
 sample.file_list <- list()
 result.file_list <- list()
-batch.file_list <- list()
+# batch.file_list <- list()
 i=1
 
 message(paste0(nfolder_list, " EDDs present:\n"))
@@ -85,45 +86,12 @@ for (i in 1:nfolder_list){
   # file.rename(file.path(input.i,"Batch_v3 rev2.txt"), file.path(input.i,"Batch_v3.txt"))
   # file.rename(file.path(input.i,"Batch_v3 rev3.txt"), file.path(input.i,"Batch_v3.txt"))
 
-  
-  temp_result <- read.table(text = gsub("\t",",", readLines(file.path(input.i,"TestResultQC_v3.txt"))), 
-                            # skip = 1,
-                            sep=",",fill=TRUE,header=FALSE,stringsAsFactors=FALSE,    
-                            col.names = c("sys_sample_code","lab_anl_method_name","analysis_date","fraction","column_number",
-                                          "test_type","lab_matrix_code","analysis_location","basis","container_id","dilution_factor",
-                                          "prep_method","prep_date","leachate_method","leachate_date","lab_name_code","qc_level",
-                                          "lab_sample_id","percent_moisture","subsample_amount","subsample_amount_unit","analyst_name",
-                                          "instrument_id","comment","preservative","final_volume","final_volume_unit","cas_rn","chemical_name",
-                                          "result_value","result_error_delta","result_type_code","reportable_result","detect_flag",
-                                          "lab_qualifiers","validator_qualifiers","interpreted_qualifiers","validated_yn",
-                                          "method_detection_limit","reporting_detection_limit","quantitation_limit","result_unit",
-                                          "detection_limit_unit","tic_retention_time","minimum_detectable_conc","counting_error","uncertainty",
-                                          "critical_value","validation_level","result_comment","qc_original_conc","qc_spike_added",
-                                          "qc_spike_measured","qc_spike_recovery","qc_dup_original_conc","qc_dup_spike_added",
-                                          "qc_dup_spike_measured","qc_dup_spike_recovery","qc_rpd","qc_spike_lcl","qc_spike_ucl","qc_rpd_cl",
-                                          "qc_spike_status","qc_dup_spike_status","qc_rpd_status","lab_sdg"),
-                            colClasses = c(fraction="character")
-  )
-  
-  temp_sample <- read.table(text = gsub("\t",",", readLines(file.path(input.i,"Sample_v3.txt"))), 
-                            # skip = 1,
-                            sep=",",fill=TRUE,header=FALSE,stringsAsFactors=FALSE,
-                            col.names = c("data_provider","sys_sample_code","sample_name","sample_matrix_code","sample_type_code",
-                                          "sample_source","parent_sample_code","sample_delivery_group","sample_date","sys_loc_code",
-                                          "start_depth","end_depth","depth_unit","chain_of_custody","sent_to_lab_date","sample_receipt_date",
-                                          "sampler","sampling_company_code","sampling_reason","sampling_technique","task_code",
-                                          "collection_quarter","composite_yn","composite_desc","sample_class","custom_field_1","custom_field_2",
-                                          "custom_field_3","comment"))
-  
-  temp_batch <- read.table(text = gsub("\t",",", readLines(file.path(input.i,"Batch_v3.txt"))), 
-                           # skip = 1,
-                           sep=",",fill=TRUE,header=FALSE,stringsAsFactors=FALSE,
-                           col.names = c("sys_sample_code",	"lab_anl_method_name",	"analysis_date",	"fraction",	"column_number",	"test_type", 
-                                         "test_batch_type", "test_batch_id"),
-                           colClasses = c(fraction="character")
-  ) 
+  temp_result <- read_excel(dir(input.i, full.names=T, pattern="xls"), sheet = "TestResultQC_v4") %>% 
+    rename(sys_sample_code = "#sys_sample_code")
 
-  
+  temp_sample <- read_excel(dir(input.i, full.names=T, pattern="xls"), sheet = "Sample_v4") %>% 
+     rename(data_provider = "#data_provider")
+ 
   ##########  Generating site IDs  ##########  
   
   # Duplicate sample_name field and convert all spaces to dashes before pulling site IDs ###
@@ -255,16 +223,16 @@ for (i in 1:nfolder_list){
   mergefile.sample <- assign(mergenm.sample, temp_sample)
   mergenm.result <- paste0(folder_list[i], "_Resultmerge")
   mergefile.result <- assign(mergenm.result, temp_result)
-  mergenm.batch <- paste0(folder_list[i], "_Batchmerge")
-  mergefile.batch <- assign(mergenm.batch, temp_batch)
+  # mergenm.batch <- paste0(folder_list[i], "_Batchmerge")
+  # mergefile.batch <- assign(mergenm.batch, temp_batch)
   
   #Add current data frame to the list of all dataframes
   RSfile_list[[i]] <- mergefile
   sample.file_list[[i]] <- mergefile.sample
   result.file_list[[i]] <- mergefile.result
-  batch.file_list[[i]] <- mergefile.batch
+  # batch.file_list[[i]] <- mergefile.batch
   
-  rm(mergefile, mergefile.sample, mergefile.result, mergefile.batch)
+  rm(mergefile, mergefile.sample, mergefile.result)
   
   # Export each merged EDD as CSVs (use for troubleshooting)
   # write.table(temp_RSmerge, file=filenm,sep=",", row.names = FALSE)
@@ -274,7 +242,7 @@ for (i in 1:nfolder_list){
 RIBSdata.ALL = do.call(rbind, RSfile_list)
 RIBSdata.sample = do.call(rbind, sample.file_list)
 RIBSdata.result = do.call(rbind, result.file_list)
-RIBSdata.batch = do.call(rbind, batch.file_list)
+# RIBSdata.batch = do.call(rbind, batch.file_list)
 
 # Move new Site ID and DEC Sample Type columns to beginning of data frame
 RIBSdata.ALL <- RIBSdata.ALL %>% 

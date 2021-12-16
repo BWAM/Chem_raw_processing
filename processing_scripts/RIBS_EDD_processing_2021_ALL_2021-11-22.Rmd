@@ -13,7 +13,7 @@ root.dir <- rprojroot::find_root("Chem_raw_processing.Rproj")
 
 ##### User-defined variables #####
 
-proj_name <- "cecs_kelso_2019-2021"    # use only lowercase with underscores as spaces"
+proj_name <- "all_2021_v3"    # use only lowercase with underscores as spaces"
 # Need to manually create folders with this name in each "input" and "output" folders
 proj_year <- "2021"
 
@@ -23,10 +23,10 @@ proj_year <- "2021"
 input.path <- file.path(root.dir, "data_input", proj_year, proj_name)
 output.path <- file.path(root.dir, "data_output", proj_year, proj_name)
 
-output.filename <- paste0("chem_preqaqc_JOIN-", proj_name, "_", Sys.Date(), ".csv")
-output.sample.filename <- paste0("chem_preqaqc_SAMPLE-", proj_name, "_", Sys.Date(), ".csv")
-output.result.filename <- paste0("chem_preqaqc_RESULT-", proj_name, "_", Sys.Date(), ".csv")
-output.batch.filename <- paste0("chem_preqaqc_BATCH-", proj_name, "_", Sys.Date(), ".csv")
+output.filename <- paste0(proj_year, "_chem_preqaqc_JOIN-", proj_name, "_", Sys.Date(), ".csv")
+output.sample.filename <- paste0(proj_year, "_chem_preqaqc_SAMPLE-", proj_name, "_", Sys.Date(), ".csv")
+output.result.filename <- paste0(proj_year, "_chem_preqaqc_RESULT-", proj_name, "_", Sys.Date(), ".csv")
+output.batch.filename <- paste0(proj_year, "_chem_preqaqc_BATCH-", proj_name, "_", Sys.Date(), ".csv")
 
 #Specify sites reference table
 # sites.master <- read_excel("C:/Users/gmlemley/New York State Office of Information Technology Services/SMAS - Streams Data Modernization/Cleaned Files/Final_Sites_ITS/20210608_S_Site_all_fields.xlsx") %>% 
@@ -38,20 +38,51 @@ sites.routine <- read_excel(file.path(root.dir, "data_input/site_tables/RIBS_ROU
   select(SITE_ID)
 
 #2021 draft sites list
-# sites.2021 <- read_excel(file.path(root.dir, "data_input/site_tables/c20211006_SEI_Simplified_W_Adjusted_ID_created20212018.xlsx")) %>% 
-#   rename(SITE_ID = SEIH_EVENT_SMAS_HISTORY_ID) %>% 
-#   select(SITE_ID) %>% 
-#   unique()
-# sites.2021.v2 <- read_excel(file.path(root.dir, "data_input/site_tables/Proposed_Sites_Sampled_2021_w_Adjusted_Site_ID_created_20211026.xlsx")) %>% 
-#   rename(SITE_ID = SITE_HISTORY_ID) %>% 
-#   select(SITE_ID) %>% 
-#   unique()
+sites.2021 <- read_excel(file.path(root.dir, "data_input/site_tables/c20211006_SEI_Simplified_W_Adjusted_ID_created20212018.xlsx")) %>% 
+  rename(SITE_ID = SEIH_EVENT_SMAS_HISTORY_ID) %>% 
+  select(SITE_ID) %>% 
+  unique()
+sites.2021.v2 <- read_excel(file.path(root.dir, "data_input/site_tables/Proposed_Sites_Sampled_2021_w_Adjusted_Site_ID_created_20211026.xlsx")) %>% 
+  rename(SITE_ID = SITE_HISTORY_ID) %>% 
+  select(SITE_ID) %>% 
+  unique()
 
 #2021 Mohawk sites (not in above list yet)
-# sites.mo.2021 <- read_excel(file.path(root.dir, "data_input/site_tables/Mohawk_2021_site_list.xlsx")) 
+sites.mo.2021 <- read_excel(file.path(root.dir, "data_input/site_tables/Mohawk_2021_site_list.xlsx")) 
 
 # sites.master <- bind_rows(sites.routine, sites.2021, sites.mo.2021)
-sites.master <- sites.routine
+sites.master <- bind_rows(sites.routine, sites.2021.v2)
+
+```
+
+```{r EDD completeness check}
+
+# # Load in project list
+# als.proj.list <- read_excel(file.path("C:/Users/gmlemley/New York State Office of Information Technology Services/BWAM - ALS/2021/ALS_job_lists", "ALS_job_list_EDD_completeness_2021-10-07.xlsx"), sheet = "SMAS") %>%
+#   janitor::clean_names() %>%
+#   rename(SDG = folder_number_3)
+# 
+# # Check new job list against previous version to see which were added
+# als.new <- read_excel(file.path("C:/Users/gmlemley/New York State Office of Information Technology Services/BWAM - ALS/2021/ALS_job_lists", "dec projectstatus 2021_new-2021-11-22.xls"), sheet = "SMAS") %>%
+#   janitor::clean_names() %>%
+#   rename(SDG = folder_number)
+# als.new.edds <- als.new %>% 
+#   filter(!SDG %in% als.proj.list$SDG)
+# # write.csv(als.new.edds, file.path("C:/Users/gmlemley/New York State Office of Information Technology Services/BWAM - ALS/2021/ALS_job_lists", "new_edds_smas_2021-11-22.csv"))
+
+als.proj.list <- read_excel(file.path("C:/Users/gmlemley/New York State Office of Information Technology Services/BWAM - ALS/2021/ALS_job_lists", "ALS_job_list_EDD_completeness_2021-10-07.xlsx"), sheet = "SMAS") %>%
+  janitor::clean_names() %>%
+  rename(SDG = folder_number_3)
+
+edds.present <- list.dirs(path = input.path, full.names = FALSE, recursive = TRUE) %>%
+  as.data.frame() %>%
+  rename(SDG = ".")
+
+edds.extra <- anti_join(edds.present, als.proj.list, by = "SDG")
+edds.missing <- anti_join(als.proj.list, edds.present, by = "SDG")
+edds.missing.als <- edds.missing %>% 
+  select(SDG, date_received, data_due_date, client_due_date, project_als)
+# write.csv(edds.missing.als, file.path("C:/Users/gmlemley/New York State Office of Information Technology Services/BWAM - ALS/2021/ALS_job_lists", "missing_edds_smas_2021-11-22.csv"))
 
 ```
 
@@ -87,7 +118,7 @@ for (i in 1:nfolder_list){
 
   
   temp_result <- read.table(text = gsub("\t",",", readLines(file.path(input.i,"TestResultQC_v3.txt"))), 
-                            # skip = 1,
+                            skip = 1,
                             sep=",",fill=TRUE,header=FALSE,stringsAsFactors=FALSE,    
                             col.names = c("sys_sample_code","lab_anl_method_name","analysis_date","fraction","column_number",
                                           "test_type","lab_matrix_code","analysis_location","basis","container_id","dilution_factor",
@@ -106,7 +137,7 @@ for (i in 1:nfolder_list){
   )
   
   temp_sample <- read.table(text = gsub("\t",",", readLines(file.path(input.i,"Sample_v3.txt"))), 
-                            # skip = 1,
+                            skip = 1,
                             sep=",",fill=TRUE,header=FALSE,stringsAsFactors=FALSE,
                             col.names = c("data_provider","sys_sample_code","sample_name","sample_matrix_code","sample_type_code",
                                           "sample_source","parent_sample_code","sample_delivery_group","sample_date","sys_loc_code",
@@ -116,7 +147,7 @@ for (i in 1:nfolder_list){
                                           "custom_field_3","comment"))
   
   temp_batch <- read.table(text = gsub("\t",",", readLines(file.path(input.i,"Batch_v3.txt"))), 
-                           # skip = 1,
+                           skip = 1,
                            sep=",",fill=TRUE,header=FALSE,stringsAsFactors=FALSE,
                            col.names = c("sys_sample_code",	"lab_anl_method_name",	"analysis_date",	"fraction",	"column_number",	"test_type", 
                                          "test_batch_type", "test_batch_id"),
@@ -132,7 +163,7 @@ for (i in 1:nfolder_list){
     mutate(sample_name_temp = sub(" ", "-", sample_name_temp))
   
   ### Generate site IDs for all non-lab sample data by pulling info from sample_name before 3rd "-".
-  temp_sample$SITE_ID <- ifelse(temp_sample$sample_matrix_code %in% c("WS", "SO", "WG"),
+  temp_sample$SITE_ID <- ifelse(temp_sample$sample_matrix_code %in% c("WS", "SO"),
                                sub("^(([^-]*-){2}[^-]*).*","\\1" , temp_sample$sample_name_temp), NA)
 
     ## Alternative method #2 to generating SITE_ID. Pulls string from before first underscore
@@ -361,10 +392,35 @@ User manually corrects site IDs that couldn't be located in master sites table b
 ```{r correct_data,echo=TRUE}
 RIBSdata.ALL_corr <- RIBSdata.ALL %>% 
   mutate(SITE_ID_corr = case_when(
+    SITE_ID == '12-CANW-7.0' ~ '12-CANW-4.0',
+    SITE_ID == '12-SCHO-1.2' ~ '12-SCHO-0.5',
     SITE_ID == '00-QAQC-0.0' ~ '00-QAQC-0.0',
-    SITE_ID == '02-CHAD-2.2' ~ '02-CHAD-1.9',
-    SITE_ID == '10-SARA-0.4' ~ '10-SARA-0.3',
-    SITE_ID == '13-ROND-9.9' ~ '13-ROND-9.2',
+    SITE_ID == '17-KENF_Ta_0.2-04212021' ~ '17-KENF_Ta-0.2',
+    SITE_ID == '12-SCHO-0.6' ~ '12-SCHO-0.5',
+    SITE_ID == '07-AMBER-0.2' ~ '07-AMBR-0.2',
+    SITE_ID == '09-BRND-2.5' ~ '09-BRND-1.6',
+    SITE_ID == '09-COLE-2.9' ~ '09-COLE-3.6',
+    SITE_ID == '09-COLE-4.6' ~ '09-COLE-4.2',
+    SITE_ID == '01-RHCR-0.8' ~ '07-RHCR-0.7',
+    SITE_ID == '07-KDIG_Tb-a7' ~ '07-KDIG_Tb-0.7',
+    SITE_ID == '07-LRNC_42-56.7' ~ '07-SEOS-56.7',
+    SITE_ID == '07COWA-5.0-07202021' ~ '07-COWA-5.0',
+    SITE_ID == '07-CANO-2.3' ~ '07-CANO-0.8',
+    SITE_ID == '07-DEAN-0.1' ~ '07-DEAN-1.9',
+    SITE_ID == '07-FISC-0.1' ~ '07-FISC-1.3',
+    SITE_ID == '07-VENS-1.8' ~ '07-VENE-1.5',
+    SITE_ID == '07-FLCK-0.4' ~ '07-FLRN-5.0',
+    SITE_ID == '07-CROK-0.1' ~ '06-CRKL-0.4',
+    SITE_ID == '11-CALA-1.0' ~ '11-UHUD-313.2',
+    SITE_ID == '11-XHR-296.0' ~ '11-UHUD-296.7',
+    SITE_ID == '11-XHR-286.6' ~ '11-UHUD-286.0',
+    SITE_ID == '07-POTT-0.7' ~ '07-POTT-0.1',
+    SITE_ID == '07-SRAG-8.0' ~ '07-SRAG-7.0',
+    SITE_ID == '02-WFREN_T12-0.2' ~ '02-WFREN_T12-0.5',
+    SITE_ID == '02-CLER_T6-3.1' ~ '02-TWTY-3.1',
+
+    # SITE_ID == '10-SARA-0.4' ~ '10-SARA-0.3',
+    # SITE_ID == '13-ROND-9.9' ~ '13-ROND-9.2',
 
     TRUE ~ SITE_ID
   )
@@ -378,10 +434,35 @@ RIBSdata.ALL_corr <- RIBSdata.ALL %>%
 
 RIBSdata.sample_corr <- RIBSdata.sample %>% 
   mutate(SITE_ID_corr = case_when(
+    SITE_ID == '12-CANW-7.0' ~ '12-CANW-4.0',
+    SITE_ID == '12-SCHO-1.2' ~ '12-SCHO-0.5',
     SITE_ID == '00-QAQC-0.0' ~ '00-QAQC-0.0',
-    SITE_ID == '02-CHAD-2.2' ~ '02-CHAD-1.9',
-    SITE_ID == '10-SARA-0.4' ~ '10-SARA-0.3',
-    SITE_ID == '13-ROND-9.9' ~ '13-ROND-9.2',
+    SITE_ID == '17-KENF_Ta_0.2-04212021' ~ '17-KENF_Ta-0.2',
+    SITE_ID == '12-SCHO-0.6' ~ '12-SCHO-0.5',
+    SITE_ID == '07-AMBER-0.2' ~ '07-AMBR-0.2',
+    SITE_ID == '09-BRND-2.5' ~ '09-BRND-1.6',
+    SITE_ID == '09-COLE-2.9' ~ '09-COLE-3.6',
+    SITE_ID == '09-COLE-4.6' ~ '09-COLE-4.2',
+    SITE_ID == '01-RHCR-0.8' ~ '07-RHCR-0.7',
+    SITE_ID == '07-KDIG_Tb-a7' ~ '07-KDIG_Tb-0.7',
+    SITE_ID == '07-LRNC_42-56.7' ~ '07-SEOS-56.7',
+    SITE_ID == '07COWA-5.0-07202021' ~ '07-COWA-5.0',
+    SITE_ID == '07-CANO-2.3' ~ '07-CANO-0.8',
+    SITE_ID == '07-DEAN-0.1' ~ '07-DEAN-1.9',
+    SITE_ID == '07-FISC-0.1' ~ '07-FISC-1.3',
+    SITE_ID == '07-VENS-1.8' ~ '07-VENE-1.5',
+    SITE_ID == '07-FLCK-0.4' ~ '07-FLRN-5.0',
+    SITE_ID == '07-CROK-0.1' ~ '06-CRKL-0.4',
+    SITE_ID == '11-CALA-1.0' ~ '11-UHUD-313.2',
+    SITE_ID == '11-XHR-296.0' ~ '11-UHUD-296.7',
+    SITE_ID == '11-XHR-286.6' ~ '11-UHUD-286.0',
+    SITE_ID == '07-POTT-0.7' ~ '07-POTT-0.1',
+    SITE_ID == '07-SRAG-8.0' ~ '07-SRAG-7.0',
+    SITE_ID == '02-WFREN_T12-0.2' ~ '02-WFREN_T12-0.5',
+    SITE_ID == '02-CLER_T6-3.1' ~ '02-TWTY-3.1',
+
+    # SITE_ID == '10-SARA-0.4' ~ '10-SARA-0.3',
+    # SITE_ID == '13-ROND-9.9' ~ '13-ROND-9.2',
 
     TRUE ~ SITE_ID
     )
@@ -391,6 +472,15 @@ RIBSdata.sample_corr <- RIBSdata.sample %>%
   select(SITE_ID_corr, SITE_ID_CORR_IND, everything()) %>% 
   rename(SITE_ID = SITE_ID_corr)
   
+
+### Enter other data corrections here:
+# Change Apr 2021 Routine R9 Chadakoin sight ID to RM 1.9 (moved from 2.2). Code here to keep screening sample as RM 2.2. 
+RIBSdata.ALL_corr <- RIBSdata.ALL_corr %>%
+  mutate(SITE_ID = ifelse(sys_sample_code %in% "02-CHAD-2.2-04122021-W", "02-CHAD-1.9", SITE_ID))
+RIBSdata.sample_corr <- RIBSdata.sample_corr %>%
+  mutate(SITE_ID = ifelse(sys_sample_code %in% "02-CHAD-2.2-04122021-W", "02-CHAD-1.9", SITE_ID))
+
+
 # Check again for mismatches and print
 siteids.present.corr <- unique(RIBSdata.ALL_corr$SITE_ID[!is.na(RIBSdata.ALL_corr$SITE_ID)])
 siteids.mismatch2 <- siteids.present.corr[!(siteids.present.corr %in% sites.master$SITE_ID)]
@@ -404,99 +494,78 @@ if(length(siteids.mismatch2 > 0)){
 }
 ```
 
-```{r Completeness check}
 
-# Apply project names based on SDG
-joblist <- read_excel(file.path("C:/Users/gmlemley/New York State Office of Information Technology Services/BWAM - ALS/2021/kelso/job_list", "dec_kelso_joblist.xlsx")) %>% 
-  select(sample_delivery_group, Project, Team)
+```{r splitting out allegheny by team (SDGs not split by team)}
 
-# Return missing EDDs from project list
-joblist.missing <- joblist %>% 
-  filter(!sample_delivery_group %in% RIBSdata.sample$sample_delivery_group)
+surveys.2021 <- read_excel(file.path(root.dir, "data_input/site_tables/c20211006_SEI_Simplified_W_Adjusted_ID_created20212018.xlsx")) %>% 
+  select(SEIH_EVENT_SMAS_HISTORY_ID, SAMPLE_TEAM, SEIH_CREW, PROJECT_TYPE, PROJECT_NAME, SEIH_EVENT_SMAS_SAMPLE_DATE) %>% 
+  rename(SITE_ID = SEIH_EVENT_SMAS_HISTORY_ID,
+         DATE = SEIH_EVENT_SMAS_SAMPLE_DATE) %>% 
+  filter(PROJECT_TYPE %in% "RIBS_Scr") %>% 
+  mutate(DATE = as.Date(DATE)) %>% 
+  filter(DATE >= "2021-09-14",
+         !(SAMPLE_TEAM %in% "FL"))
 
-sample.proj <- RIBSdata.sample_corr %>% 
-  left_join(joblist) %>% 
-  select(Project, Team, everything()) %>% 
-  filter(sample_source %in% "Field")
+samp.alleg <- RIBSdata.sample_corr %>% 
+  filter(sample_delivery_group %in% c("R2109618", "R2109607", "R2109606", "R2109605", "R2109583", "R2109582", "R2109702")) %>% 
+  filter(!(SITE_ID %in% "00-QAQC-0.0"),
+         sample_type_code %in% "N")
+  
+surveys.2021.chem <- surveys.2021 %>% 
+  inner_join(samp.alleg) %>% 
+  select(sample_delivery_group, everything())
 
-sample.ribs <- sample.proj %>% 
-  filter(grepl("Routine", Project))
-sample.meth <- sample.proj %>% 
-  filter(grepl("Methods", Project))
+# Review team/sdg association
+test <- surveys.2021.chem %>% 
+  filter(SAMPLE_TEAM %in% "CO1")
+cat("CO1")
+unique(test$sample_delivery_group)
+test <- surveys.2021.chem %>% 
+  filter(SAMPLE_TEAM %in% "CO2")
+cat("CO2")
+unique(test$sample_delivery_group)
+test <- surveys.2021.chem %>% 
+  filter(SAMPLE_TEAM %in% "CO3")
+cat("CO3")
+unique(test$sample_delivery_group)
+test <- surveys.2021.chem %>% 
+  filter(SAMPLE_TEAM %in% "CO4")
+cat("CO4")
+unique(test$sample_delivery_group)
+# Conclusion: SDGs not separated by team at all, but probably by receipt date.
 
-k.2019 <- sample.ribs %>% 
-  filter(grepl("2019", sample_date),
-         # sample_source %in% "Field",
-         DEC_sample_type %in% "N") 
+team.site <- surveys.2021.chem %>% 
+  select(SITE_ID, SAMPLE_TEAM)
 
-k.2021apr <- sample.ribs %>% 
-  filter(!grepl("2019", sample_date),
-         grepl("04/", sample_date),
-         # sample_source %in% "Field",
-         DEC_sample_type %in% "N")  
+# Create new SDG_Team column for Allegheny SGDs for proper QC association by team. Use team number for alleg. and keep SDG numbers for all others.
+RIBSdata.ALL_corr <- RIBSdata.ALL_corr %>% 
+  left_join(team.site) %>% 
+  mutate(SDG_team = ifelse(sample_delivery_group %in% c("R2109618", "R2109607", "R2109606", "R2109605", "R2109583", "R2109582", "R2109702"),
+                           SAMPLE_TEAM,
+                           sample_delivery_group)
+  ) %>% 
+  mutate(SDG_team = ifelse(is.na(SDG_team), sample_delivery_group, SDG_team)) %>% 
+  select(SDG_team, sample_delivery_group, SAMPLE_TEAM, everything()) %>% 
+  select(-SAMPLE_TEAM)
 
-k.2021aug <- sample.ribs %>% 
-  filter(!grepl("2019", sample_date),
-         grepl("08/", sample_date),
-         # sample_source %in% "Field",
-         DEC_sample_type %in% "N")  
 
-# Return missing sites from 2021 sampling
-k.2021apr.missing <- sites.routine %>% 
-  filter(!SITE_ID %in% k.2021apr$SITE_ID)
-k.2021aug.missing <- sites.routine %>% 
-  filter(!SITE_ID %in% k.2021aug$SITE_ID)
 ```
 
 
 Write final tables to CSV (Remember to copy report or Rmd to output dir)
 ```{r}
 
-# Apply project names based on SDG
-joblist <- read_excel(file.path("C:/Users/gmlemley/New York State Office of Information Technology Services/BWAM - ALS/2021/kelso/job_list", "dec_kelso_joblist.xlsx")) %>% 
-  select(sample_delivery_group, Project, Team)
+# Export sample table
+write.table(RIBSdata.sample_corr, file= paste0(output.path,"/",output.sample.filename),sep=",", row.names = FALSE)
 
-RIBSdata.ALL_corr.proj <- RIBSdata.ALL_corr %>% 
-  left_join(joblist) %>% 
-  select(Project, Team, everything()) 
-  # filter(sample_source %in% "Field")
+# Export results table
+write.table(RIBSdata.result, file= paste0(output.path,"/",output.result.filename),sep=",", row.names = FALSE)
 
-# Check job list against data for missing EDDs
-k.missing <- joblist %>% 
-  select(sample_delivery_group, Project) %>% 
-  filter(!sample_delivery_group %in% RIBSdata.ALL_corr.proj$sample_delivery_group)
-# Missing K2103837 (analysis canceled due to resampling needed) and K2109730 (not yet received)
+# Export batch table
+write.table(RIBSdata.batch, file= paste0(output.path,"/",output.batch.filename),sep=",", row.names = FALSE)
 
-RIBSdata.meth_eval <- RIBSdata.ALL_corr.proj %>% 
-  filter(Project %in% "CEC Methods Eval")
-
-# Manually check methods eval data for missing sites
-# > sort(unique(RIBSdata.meth_eval$SITE_ID))
-# [1] "10-BOQT-2.6"   "10-SABL-14.6"  "10-SARA-0.3"   "11-UHUD-267.8" "11-UHUD-42.5"  "13-LHUD-125.8" "13-ROND-9.2"   "13-WALK-18.6"  "17-BRNX-5.6" 
-# # Mohawk is missing (EDD K2109730)
-
-RIBSdata.routine_cec <- RIBSdata.ALL_corr.proj %>% 
-  filter(grepl("*Routine", Project))
-
-# # Export sample table
-# write.table(RIBSdata.sample_corr.proj, file= paste0(output.path,"/",output.sample.filename),sep=",", row.names = FALSE)
-# 
-# # Export results table
-# write.table(RIBSdata.result, file= paste0(output.path,"/",output.result.filename),sep=",", row.names = FALSE)
-# 
-# # Export batch table
-# write.table(RIBSdata.batch, file= paste0(output.path,"/",output.batch.filename),sep=",", row.names = FALSE)
-
-# Export pre-joined tables (for running through QAQC script)
-write.csv(RIBSdata.routine_cec, file.path("C:/Users/gmlemley/New York State Office of Information Technology Services/BWAM - CECs/data/ppcp", "routine_ppcp_results_2019_2021.csv"),row.names = FALSE)
-
-
-# Export sample and batch (all data) for adding to database
-# # Export sample table
-# write.table(RIBSdata.sample_corr.proj, file= paste0(output.path,"/",output.sample.filename),sep=",", row.names = FALSE)
-# 
-# # Export results table
-# write.table(RIBSdata.result, file= paste0(output.path,"/",output.result.filename),sep=",", row.names = FALSE)
+# Export pre-joined table (for running through QAQC script)
+write.table(RIBSdata.ALL_corr, file= paste0(output.path,"/",output.filename),sep=",", row.names = FALSE)
 
 
 ```
