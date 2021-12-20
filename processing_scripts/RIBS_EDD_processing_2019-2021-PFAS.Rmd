@@ -21,7 +21,7 @@ proj_year <- "2021"
 
 
 # input.path <- file.path(root.dir, "data_input", proj_year, proj_name)
-input.path <- file.path("C:/Users/gmlemley/New York State Office of Information Technology Services/BWAM - TestAmerica/2021/routine_pfas/")
+input.path <- file.path("C:/Users/gmlemley/New York State Office of Information Technology Services/BWAM - TestAmerica/2021/lab_reports/routine_pfas/")
 output.path <- file.path(root.dir, "data_output", proj_year, proj_name)
 
 output.filename <- paste0("chem_preqaqc_JOIN-", proj_name, "_", Sys.Date(), ".csv")
@@ -86,11 +86,13 @@ for (i in 1:nfolder_list){
   # file.rename(file.path(input.i,"Batch_v3 rev2.txt"), file.path(input.i,"Batch_v3.txt"))
   # file.rename(file.path(input.i,"Batch_v3 rev3.txt"), file.path(input.i,"Batch_v3.txt"))
 
-  temp_result <- read_excel(dir(input.i, full.names=T, pattern="xls"), sheet = "TestResultQC_v4") %>% 
-    rename(sys_sample_code = "#sys_sample_code")
+  temp_result <- read_excel(dir(input.i, full.names=T, pattern="EquNysdec.xls"), sheet = "TestResultQC_v4") %>% 
+    rename(sys_sample_code = "#sys_sample_code") %>% 
+    mutate(job_number = folder_list[i])
 
-  temp_sample <- read_excel(dir(input.i, full.names=T, pattern="xls"), sheet = "Sample_v4") %>% 
-     rename(data_provider = "#data_provider")
+  temp_sample <- read_excel(dir(input.i, full.names=T, pattern="EquNysdec.xls"), sheet = "Sample_v4") %>% 
+    rename(data_provider = "#data_provider") %>% 
+    mutate(job_number = folder_list[i])
  
   ##########  Generating site IDs  ##########  
   
@@ -114,7 +116,7 @@ for (i in 1:nfolder_list){
   
 
   # Set Site ID to LAB_INTERNAL for such samples
-  temp_sample$SITE_ID <- ifelse(temp_sample$sample_matrix_code == "WQ", "00-QAQC-0.0", temp_sample$SITE_ID)
+  temp_sample$SITE_ID <- ifelse(temp_sample$sample_matrix_code == "WQ" & temp_sample$sample_type_code != "FB", "00-QAQC-0.0", temp_sample$SITE_ID)
   
   # Delete temp column
   temp_sample <- temp_sample %>% 
@@ -168,7 +170,7 @@ for (i in 1:nfolder_list){
   temp_sample$DEC_sample_type <- ifelse(temp_sample$sys_sample_code %in% parent.vec,"N_DUPPARENT",temp_sample$DEC_sample_type)
 
   # Identify internal lab samples in DEC_sample_type_field
-  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_matrix_code == "WQ", "LAB_INTERNAL", temp_sample$DEC_sample_type)  
+  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_matrix_code == "WQ" & temp_sample$sample_type_code != "FB", "LAB_INTERNAL", temp_sample$DEC_sample_type)  
   # Identify trib blanks (Mohawk 2019) in DEC_sample_type field
   temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_type_code == "TB", "TB", temp_sample$DEC_sample_type)
   
