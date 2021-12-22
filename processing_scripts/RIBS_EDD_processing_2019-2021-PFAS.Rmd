@@ -13,7 +13,7 @@ root.dir <- rprojroot::find_root("Chem_raw_processing.Rproj")
 
 ##### User-defined variables #####
 
-proj_name <- "PFAS_2019-2021"    # use only lowercase with underscores as spaces"
+proj_name <- "PFAS_2019_2021"    # use only lowercase with underscores as spaces"
 # Need to manually create folders with this name in each "input" and "output" folders
 proj_year <- "2021"
 
@@ -21,7 +21,7 @@ proj_year <- "2021"
 
 
 # input.path <- file.path(root.dir, "data_input", proj_year, proj_name)
-input.path <- file.path("C:/Users/gmlemley/New York State Office of Information Technology Services/BWAM - TestAmerica/2021/lab_reports/routine_pfas/")
+input.path <- file.path("C:/Users/gmlemley/New York State Office of Information Technology Services/BWAM - TestAmerica/2021/lab_reports/routine_pfas_2019_2021/")
 output.path <- file.path(root.dir, "data_output", proj_year, proj_name)
 
 output.filename <- paste0("chem_preqaqc_JOIN-", proj_name, "_", Sys.Date(), ".csv")
@@ -88,11 +88,13 @@ for (i in 1:nfolder_list){
 
   temp_result <- read_excel(dir(input.i, full.names=T, pattern="EquNysdec.xls"), sheet = "TestResultQC_v4") %>% 
     rename(sys_sample_code = "#sys_sample_code") %>% 
-    mutate(job_number = folder_list[i])
+    mutate(job_number = folder_list[i]) %>% 
+    select(job_number, everything())
 
   temp_sample <- read_excel(dir(input.i, full.names=T, pattern="EquNysdec.xls"), sheet = "Sample_v4") %>% 
     rename(data_provider = "#data_provider") %>% 
-    mutate(job_number = folder_list[i])
+    mutate(job_number = folder_list[i]) %>% 
+    select(job_number, everything())
  
   ##########  Generating site IDs  ##########  
   
@@ -102,7 +104,7 @@ for (i in 1:nfolder_list){
     mutate(sample_name_temp = sub(" ", "-", sample_name_temp))
   
   ### Generate site IDs for all non-lab sample data by pulling info from sample_name before 3rd "-".
-  temp_sample$SITE_ID <- ifelse(temp_sample$sample_matrix_code %in% c("WS", "SO", "WG"),
+  temp_sample$SITE_ID <- ifelse(temp_sample$sample_source %in% "Field" | temp_sample$sample_type_code %in% "TB",
                                sub("^(([^-]*-){2}[^-]*).*","\\1" , temp_sample$sample_name_temp), NA)
 
     ## Alternative method #2 to generating SITE_ID. Pulls string from before first underscore
@@ -115,64 +117,68 @@ for (i in 1:nfolder_list){
     #                            substr(temp_sample$sample_name_temp, 1, as.numeric(gregexpr(pattern ='\\.',temp_sample$sample_name_temp)) + 1), NA)
   
 
-  # Set Site ID to LAB_INTERNAL for such samples
-  temp_sample$SITE_ID <- ifelse(temp_sample$sample_matrix_code == "WQ" & temp_sample$sample_type_code != "FB", "00-QAQC-0.0", temp_sample$SITE_ID)
-  
   # Delete temp column
   temp_sample <- temp_sample %>% 
     select(-sample_name_temp)
   
-  ###########################################
+  ############## DATA CORRECTIONS #################
   
-    
+  
+  # Recode fields for FB samples due to inconsistencies with TestAmerica data and differences with how ALS codes our QC samples
+  temp_sample$sample_matrix_code <- ifelse(grepl("-FB",temp_sample$sample_name),"WS",temp_sample$sample_matrix_code)
+  temp_sample$sample_type_code <- ifelse(grepl("-FB",temp_sample$sample_name),"N",temp_sample$sample_type_code)
+  temp_sample$sample_source <- ifelse(grepl("-FB",temp_sample$sample_name),"Field",temp_sample$sample_source)
+  # Recode sample_source field for MS and MSDs as "Lab" instead of "Field" to be consistent with ALS data
+  temp_sample$sample_source <- ifelse(grepl("MS|MSD",temp_sample$sample_type_code),"Lab",temp_sample$sample_source)
+
+  
   ##### Locate and code QAQC samples #####
+    
+  # Set Site ID to 00-QAQC-0.0 for internal lab samples
+  temp_sample$SITE_ID <- ifelse(temp_sample$sample_source %in% "Lab", "00-QAQC-0.0", temp_sample$SITE_ID)
+  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source %in% "Lab", "LAB_INTERNAL", NA)
+  
 
   # Populate DEC_sample_type for EB samples.
-  temp_sample$DEC_sample_type <- ifelse(grepl("-EB",temp_sample$sample_name),"EB", NA)
-  # temp_sample$DEC_sample_type <- ifelse(grepl("WS-EB",temp_sample$sample_name),"EB",temp_sample$DEC_sample_type)
-  temp_sample$DEC_sample_type <- ifelse(grepl(" EB",temp_sample$sample_name),"EB",temp_sample$DEC_sample_type)
-  temp_sample$DEC_sample_type <- ifelse(grepl("EB_",temp_sample$sample_name),"EB",temp_sample$DEC_sample_type)
+  # temp_sample$DEC_sample_type <- ifelse(grepl("-EB",temp_sample$sample_name),"EB", NA)
 
   # Populate DEC_sample_type for FB samples. (only used in Routine data, where mercury samples exist)
-  temp_sample$DEC_sample_type <- ifelse(grepl("-FB",temp_sample$sample_name),"FB",temp_sample$DEC_sample_type)
-  # temp_sample$DEC_sample_type <- ifelse(grepl("WS-FB",temp_sample$sample_name),"FB",temp_sample$DEC_sample_type)  
-  temp_sample$DEC_sample_type <- ifelse(grepl(" FB",temp_sample$sample_name),"FB",temp_sample$DEC_sample_type)
-  
+  temp_sample$DEC_sample_type <- ifelse(grepl("-FB",temp_sample$sample_name),"FB", temp_sample$DEC_sample_type)
+
   # Populate DEC_sample_type for duplicate samples.
       # Accounts for different DUP variants ("-DUP"", " DUP", "WSDUP", "WDUP", and upper/lowercase instances)
-  temp_sample$DEC_sample_type <- ifelse(grepl("-[Ss][Ee][Qq]",temp_sample$sample_name),"DUP",temp_sample$DEC_sample_type)
-  temp_sample$DEC_sample_type <- ifelse(grepl(" [Ss][Ee][Qq]",temp_sample$sample_name),"DUP",temp_sample$DEC_sample_type)
-  temp_sample$DEC_sample_type <- ifelse(grepl("WS[Ss][Ee][Qq]",temp_sample$sample_name),"DUP",temp_sample$DEC_sample_type)
-  temp_sample$DEC_sample_type <- ifelse(grepl("W[Ss][Ee][Qq]",temp_sample$sample_name),"DUP",temp_sample$DEC_sample_type)
-  temp_sample$DEC_sample_type <- ifelse(grepl("[Ss][Ee][Qq]_",temp_sample$sample_name),"DUP",temp_sample$DEC_sample_type)
-  
+  # temp_sample$DEC_sample_type <- ifelse(grepl("-[Ss][Ee][Qq]",temp_sample$sample_name),"DUP",temp_sample$DEC_sample_type)
+  # temp_sample$DEC_sample_type <- ifelse(grepl(" [Ss][Ee][Qq]",temp_sample$sample_name),"DUP",temp_sample$DEC_sample_type)
+  # temp_sample$DEC_sample_type <- ifelse(grepl("WS[Ss][Ee][Qq]",temp_sample$sample_name),"DUP",temp_sample$DEC_sample_type)
+  # temp_sample$DEC_sample_type <- ifelse(grepl("W[Ss][Ee][Qq]",temp_sample$sample_name),"DUP",temp_sample$DEC_sample_type)
+  # temp_sample$DEC_sample_type <- ifelse(grepl("[Ss][Ee][Qq]_",temp_sample$sample_name),"DUP",temp_sample$DEC_sample_type)
   
   # Populate DEC_sample_type for N_DUPPARENT cells by locating DUP samples and finding parent sample by removing DUP code. 
   # Updated 4/7/21 to perform on sys_sample_code instead of sample_name in case reanalyses present (was causing to fail).
-  dup.vec <- temp_sample$sys_sample_code[grepl("-[Ss][Ee][Qq]", temp_sample$sys_sample_code)]
-  parent.vec <- gsub("-[Ss][Ee][Qq]", "", dup.vec)
-  temp_sample$DEC_sample_type <- ifelse(temp_sample$sys_sample_code %in% parent.vec,"N_DUPPARENT",temp_sample$DEC_sample_type)
-  
-  dup.vec <- temp_sample$sys_sample_code[grepl(" [Ss][Ee][Qq]", temp_sample$sys_sample_code)]
-  parent.vec <- gsub(" [Ss][Ee][Qq]", "", dup.vec)
-  temp_sample$DEC_sample_type <- ifelse(temp_sample$sys_sample_code %in% parent.vec,"N_DUPPARENT",temp_sample$DEC_sample_type)
-  
-  dup.vec <- temp_sample$sys_sample_code[grepl("WS[Ss][Ee][Qq]", temp_sample$sys_sample_code)]
-  parent.vec <- gsub("WS[Ss][Ee][Qq]", "WS", dup.vec)
-  temp_sample$DEC_sample_type <- ifelse(temp_sample$sys_sample_code %in% parent.vec,"N_DUPPARENT",temp_sample$DEC_sample_type)
-  
-  dup.vec <- temp_sample$sys_sample_code[grepl("W[Ss][Ee][Qq]", temp_sample$sys_sample_code)]
-  parent.vec <- gsub("W[Ss][Ee][Qq]", "W", dup.vec)
-  temp_sample$DEC_sample_type <- ifelse(temp_sample$sys_sample_code %in% parent.vec,"N_DUPPARENT",temp_sample$DEC_sample_type)
-
-  dup.vec <- temp_sample$sys_sample_code[grepl("[Ss][Ee][Qq]_", temp_sample$sys_sample_code)]
-  parent.vec <- gsub("[Ss][Ee][Qq]_", "_", dup.vec)
-  temp_sample$DEC_sample_type <- ifelse(temp_sample$sys_sample_code %in% parent.vec,"N_DUPPARENT",temp_sample$DEC_sample_type)
+  # dup.vec <- temp_sample$sys_sample_code[grepl("-[Ss][Ee][Qq]", temp_sample$sys_sample_code)]
+  # parent.vec <- gsub("-[Ss][Ee][Qq]", "", dup.vec)
+  # temp_sample$DEC_sample_type <- ifelse(temp_sample$sys_sample_code %in% parent.vec,"N_DUPPARENT",temp_sample$DEC_sample_type)
+  # 
+  # dup.vec <- temp_sample$sys_sample_code[grepl(" [Ss][Ee][Qq]", temp_sample$sys_sample_code)]
+  # parent.vec <- gsub(" [Ss][Ee][Qq]", "", dup.vec)
+  # temp_sample$DEC_sample_type <- ifelse(temp_sample$sys_sample_code %in% parent.vec,"N_DUPPARENT",temp_sample$DEC_sample_type)
+  # 
+  # dup.vec <- temp_sample$sys_sample_code[grepl("WS[Ss][Ee][Qq]", temp_sample$sys_sample_code)]
+  # parent.vec <- gsub("WS[Ss][Ee][Qq]", "WS", dup.vec)
+  # temp_sample$DEC_sample_type <- ifelse(temp_sample$sys_sample_code %in% parent.vec,"N_DUPPARENT",temp_sample$DEC_sample_type)
+  # 
+  # dup.vec <- temp_sample$sys_sample_code[grepl("W[Ss][Ee][Qq]", temp_sample$sys_sample_code)]
+  # parent.vec <- gsub("W[Ss][Ee][Qq]", "W", dup.vec)
+  # temp_sample$DEC_sample_type <- ifelse(temp_sample$sys_sample_code %in% parent.vec,"N_DUPPARENT",temp_sample$DEC_sample_type)
+  # 
+  # dup.vec <- temp_sample$sys_sample_code[grepl("[Ss][Ee][Qq]_", temp_sample$sys_sample_code)]
+  # parent.vec <- gsub("[Ss][Ee][Qq]_", "_", dup.vec)
+  # temp_sample$DEC_sample_type <- ifelse(temp_sample$sys_sample_code %in% parent.vec,"N_DUPPARENT",temp_sample$DEC_sample_type)
 
   # Identify internal lab samples in DEC_sample_type_field
-  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_matrix_code == "WQ" & temp_sample$sample_type_code != "FB", "LAB_INTERNAL", temp_sample$DEC_sample_type)  
+  # temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_matrix_code == "WQ" , "LAB_INTERNAL", temp_sample$DEC_sample_type)
   # Identify trib blanks (Mohawk 2019) in DEC_sample_type field
-  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_type_code == "TB", "TB", temp_sample$DEC_sample_type)
+  # temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_type_code == "TB", "TB", temp_sample$DEC_sample_type)
   
   # Populate remaining DEC_sample_type NAs for field data with "N" for normal samples (assumes all remaining NAs are normal samples).
   temp_sample$DEC_sample_type <- ifelse(is.na(temp_sample$DEC_sample_type),"N",temp_sample$DEC_sample_type)
