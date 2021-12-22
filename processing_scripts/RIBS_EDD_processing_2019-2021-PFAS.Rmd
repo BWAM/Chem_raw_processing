@@ -76,16 +76,6 @@ for (i in 1:nfolder_list){
   input.i <- paste0(input.path, "/", folder_list[i])
   output.i <- file.path(root.dir, "data_output")
 
-  # rename revised EDD filenames if they exist  # file.rename(file.path(input.i,"TestResultQC_v3 REV.txt"), file.path(input.i,"TestResultQC_v3.txt"))
-  # file.rename(file.path(input.i,"TestResultQC_v3 rev2.txt"), file.path(input.i,"TestResultQC_v3.txt"))
-  # file.rename(file.path(input.i,"TestResultQC_v3 rev3.txt"), file.path(input.i,"TestResultQC_v3.txt"))
-  # file.rename(file.path(input.i,"Sample_v3 REV.txt"), file.path(input.i,"Sample_v3.txt"))
-  # file.rename(file.path(input.i,"Sample_v3 rev2.txt"), file.path(input.i,"Sample_v3.txt"))
-  # file.rename(file.path(input.i,"Sample_v3 rev3.txt"), file.path(input.i,"Sample_v3.txt"))
-  # file.rename(file.path(input.i,"Batch_v3 REV.txt"), file.path(input.i,"Batch_v3.txt"))
-  # file.rename(file.path(input.i,"Batch_v3 rev2.txt"), file.path(input.i,"Batch_v3.txt"))
-  # file.rename(file.path(input.i,"Batch_v3 rev3.txt"), file.path(input.i,"Batch_v3.txt"))
-
   temp_result <- read_excel(dir(input.i, full.names=T, pattern="EquNysdec.xls"), sheet = "TestResultQC_v4") %>% 
     rename(sys_sample_code = "#sys_sample_code") %>% 
     mutate(job_number = folder_list[i]) %>% 
@@ -107,40 +97,34 @@ for (i in 1:nfolder_list){
   temp_sample$SITE_ID <- ifelse(temp_sample$sample_source %in% "Field" | temp_sample$sample_type_code %in% "TB",
                                sub("^(([^-]*-){2}[^-]*).*","\\1" , temp_sample$sample_name_temp), NA)
 
-    ## Alternative method #2 to generating SITE_ID. Pulls string from before first underscore
-    # temp_sample$SITE_ID <- ifelse(temp_sample$sample_matrix_code == "WS",
-    #                            str_extract(temp_sample$sample_name_temp, "[^_]+"), NA)
-    
-  ## Alternative method #3 to generating SITE_ID. Pulls string from position after decimal (as expected in river mile). WOrks better for older data:
-        ## DOES NOT WORK IF NO DECIMAL PRESENT (some site IDs use -001 as rivermile)
-    # temp_sample$SITE_ID <- ifelse(temp_sample$sample_matrix_code == "WS",
-    #                            substr(temp_sample$sample_name_temp, 1, as.numeric(gregexpr(pattern ='\\.',temp_sample$sample_name_temp)) + 1), NA)
-  
-
   # Delete temp column
   temp_sample <- temp_sample %>% 
     select(-sample_name_temp)
   
+  
   ############## DATA CORRECTIONS #################
   
-  
-  # Recode fields for FB samples due to inconsistencies with TestAmerica data and differences with how ALS codes our QC samples
+  # Recode fields for FB samples due to inconsistencies with TestAmerica data and differences with how ALS codes our QC samples (which our tables and metadata was built from)
   temp_sample$sample_matrix_code <- ifelse(grepl("-FB",temp_sample$sample_name),"WS",temp_sample$sample_matrix_code)
   temp_sample$sample_type_code <- ifelse(grepl("-FB",temp_sample$sample_name),"N",temp_sample$sample_type_code)
   temp_sample$sample_source <- ifelse(grepl("-FB",temp_sample$sample_name),"Field",temp_sample$sample_source)
-  # Recode sample_source field for MS and MSDs as "Lab" instead of "Field" to be consistent with ALS data
+  # Recode sample_source field for MS and MSDs as "Lab" instead of "Field" to be consistent with ALS data and our metadata
   temp_sample$sample_source <- ifelse(grepl("MS|MSD",temp_sample$sample_type_code),"Lab",temp_sample$sample_source)
+  temp_sample$sample_matrix_code <- ifelse(grepl("MS|MSD",temp_sample$sample_type_code),"WS",temp_sample$sample_matrix_code)
 
-  
+  # Correct 3 samples falsely noted as "FB" sample_type_code. Checked against COCs and QC schedules.
+  temp_sample$sample_matrix_code <- ifelse(grepl("13-LHUD-125.8-102219-W-20191022",temp_sample$sys_sample_code),"WS",temp_sample$sample_matrix_code)
+  temp_sample$sample_matrix_code <- ifelse(grepl("14-WDEL-16.2-102319-W-20191023",temp_sample$sys_sample_code),"WS",temp_sample$sample_matrix_code)
+  temp_sample$sample_matrix_code <- ifelse(grepl("07-OSWE-5.2-08172021-W",temp_sample$sys_sample_code),"WS",temp_sample$sample_matrix_code)
+  temp_sample$sample_type_code <- ifelse(grepl("13-LHUD-125.8-102219-W-20191022",temp_sample$sys_sample_code),"N",temp_sample$sample_type_code)
+  temp_sample$sample_type_code <- ifelse(grepl("14-WDEL-16.2-102319-W-20191023",temp_sample$sys_sample_code),"N",temp_sample$sample_type_code)
+  temp_sample$sample_type_code <- ifelse(grepl("07-OSWE-5.2-08172021-W",temp_sample$sys_sample_code),"N",temp_sample$sample_type_code)
+
   ##### Locate and code QAQC samples #####
     
   # Set Site ID to 00-QAQC-0.0 for internal lab samples
-  temp_sample$SITE_ID <- ifelse(temp_sample$sample_source %in% "Lab", "00-QAQC-0.0", temp_sample$SITE_ID)
-  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_source %in% "Lab", "LAB_INTERNAL", NA)
-  
-
-  # Populate DEC_sample_type for EB samples.
-  # temp_sample$DEC_sample_type <- ifelse(grepl("-EB",temp_sample$sample_name),"EB", NA)
+  temp_sample$SITE_ID <- ifelse(temp_sample$sample_matrix_code %in% "WQ", "00-QAQC-0.0", temp_sample$SITE_ID)
+  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_matrix_code %in% "WQ", "LAB_INTERNAL", NA)
 
   # Populate DEC_sample_type for FB samples. (only used in Routine data, where mercury samples exist)
   temp_sample$DEC_sample_type <- ifelse(grepl("-FB",temp_sample$sample_name),"FB", temp_sample$DEC_sample_type)
@@ -175,27 +159,18 @@ for (i in 1:nfolder_list){
   # parent.vec <- gsub("[Ss][Ee][Qq]_", "_", dup.vec)
   # temp_sample$DEC_sample_type <- ifelse(temp_sample$sys_sample_code %in% parent.vec,"N_DUPPARENT",temp_sample$DEC_sample_type)
 
-  # Identify internal lab samples in DEC_sample_type_field
-  # temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_matrix_code == "WQ" , "LAB_INTERNAL", temp_sample$DEC_sample_type)
-  # Identify trib blanks (Mohawk 2019) in DEC_sample_type field
-  # temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_type_code == "TB", "TB", temp_sample$DEC_sample_type)
-  
   # Populate remaining DEC_sample_type NAs for field data with "N" for normal samples (assumes all remaining NAs are normal samples).
   temp_sample$DEC_sample_type <- ifelse(is.na(temp_sample$DEC_sample_type),"N",temp_sample$DEC_sample_type)
 
   # Count number of each FIELD sample type identified and print
   count.Normal <- length(temp_sample$DEC_sample_type[temp_sample$sample_source == "Field" & grepl("^N$", temp_sample$DEC_sample_type)])  
   message(paste0(count.Normal," N"))
-  
-  count.N_DUPPARENT <- length(temp_sample$DEC_sample_type[temp_sample$sample_source == "Field" & grepl("N_DUPPARENT", temp_sample$DEC_sample_type)])  
-  message(paste0(count.N_DUPPARENT," N_DUPPARENT"))
-  
-  count.DUP <- length(temp_sample$DEC_sample_type[temp_sample$sample_source == "Field" & grepl("^DUP$", temp_sample$DEC_sample_type)])  
-  message(paste0(count.DUP," DUP"))
-  
-  count.EB <- length(temp_sample$DEC_sample_type[temp_sample$sample_source == "Field" & grepl("^EB$", temp_sample$DEC_sample_type)])  
-  message(paste0(count.EB," EB"))
-  
+  # count.N_DUPPARENT <- length(temp_sample$DEC_sample_type[temp_sample$sample_source == "Field" & grepl("N_DUPPARENT", temp_sample$DEC_sample_type)])  
+  # message(paste0(count.N_DUPPARENT," N_DUPPARENT"))
+  # count.DUP <- length(temp_sample$DEC_sample_type[temp_sample$sample_source == "Field" & grepl("^DUP$", temp_sample$DEC_sample_type)])  
+  # message(paste0(count.DUP," DUP"))
+  # count.EB <- length(temp_sample$DEC_sample_type[temp_sample$sample_source == "Field" & grepl("^EB$", temp_sample$DEC_sample_type)])  
+  # message(paste0(count.EB," EB"))
   count.FB <- length(temp_sample$DEC_sample_type[temp_sample$sample_source == "Field" & grepl("^FB$", temp_sample$DEC_sample_type)])  
   message(paste0(count.FB," FB\n"))
   
@@ -203,9 +178,9 @@ for (i in 1:nfolder_list){
   # message(paste0(count.MS," MS (including lab MSs)\n"))
   
   # Check if equal number of DUP and N_DUPPARENT codes assigned. Stop script if not.
-  if(identical(count.DUP,count.N_DUPPARENT) == FALSE){
-    stop("    DUP and N_DUPPARENT counts do not match (script stopped)")
-  }
+  # if(identical(count.DUP,count.N_DUPPARENT) == FALSE){
+  #   stop("    DUP and N_DUPPARENT counts do not match (script stopped)")
+  # }
     
   ##### Merge sample and result files #####
     # Must merge by sys_sample_code and not sample_name in order to appropriately associate MS, dissolved samples (sometimes "Diss" or "S" added to end of sys_sample_code), and other lab samples with appropriate results.
@@ -271,9 +246,9 @@ cat(as.character(sort(sample.dates)), sep = "\n")
 # Rebuilt code code block below when expanded code assignments to lab samples
 
 totalcount.Normal <- length(RIBSdata.sample$DEC_sample_type[RIBSdata.sample$sample_source == "Field" & grepl("^N$", RIBSdata.sample$DEC_sample_type)])
-totalcount.DUP <- length(RIBSdata.sample$DEC_sample_type[RIBSdata.sample$sample_source == "Field" & grepl("^DUP$", RIBSdata.sample$DEC_sample_type)])
-totalcount.N_DUPPARENT <- length(RIBSdata.sample$DEC_sample_type[RIBSdata.sample$sample_source == "Field" & grepl("N_DUPPARENT", RIBSdata.sample$DEC_sample_type)])
-totalcount.EB <- length(RIBSdata.sample$DEC_sample_type[RIBSdata.sample$sample_source == "Field" & grepl("^EB$", RIBSdata.sample$DEC_sample_type)])
+# totalcount.DUP <- length(RIBSdata.sample$DEC_sample_type[RIBSdata.sample$sample_source == "Field" & grepl("^DUP$", RIBSdata.sample$DEC_sample_type)])
+# totalcount.N_DUPPARENT <- length(RIBSdata.sample$DEC_sample_type[RIBSdata.sample$sample_source == "Field" & grepl("N_DUPPARENT", RIBSdata.sample$DEC_sample_type)])
+# totalcount.EB <- length(RIBSdata.sample$DEC_sample_type[RIBSdata.sample$sample_source == "Field" & grepl("^EB$", RIBSdata.sample$DEC_sample_type)])
 totalcount.FB <- length(RIBSdata.sample$DEC_sample_type[RIBSdata.sample$sample_source == "Field" & grepl("^FB$", RIBSdata.sample$DEC_sample_type)])     # FB only present in Routine Network data
 totalcount.MS <- length(RIBSdata.sample$DEC_sample_type[RIBSdata.sample$sample_source == "Lab" & RIBSdata.sample$sample_type_code == "MS"]) 
 totalcount.MSD <- length(RIBSdata.sample$DEC_sample_type[RIBSdata.sample$sample_source == "Lab" & RIBSdata.sample$sample_type_code == "SD"]) 
@@ -281,18 +256,18 @@ totalcount.LR <- length(RIBSdata.sample$DEC_sample_type[RIBSdata.sample$sample_s
 
 message(paste0("\nTotal samples identified (+1 for each subcontracted sample :)\n", 
                totalcount.Normal, " N\n", 
-               totalcount.N_DUPPARENT, " N_DUPPARENT\n", 
-               totalcount.DUP, " DUP\n",  
-               totalcount.EB, " EB\n", 
+               # totalcount.N_DUPPARENT, " N_DUPPARENT\n", 
+               # totalcount.DUP, " DUP\n",  
+               # totalcount.EB, " EB\n", 
                totalcount.FB, " FB (should only be present for Routine)\n" ,
                totalcount.MS, " Matrix Spikes (not run on all params for all samples)\n",
                totalcount.MSD, " Matrix Spike Dups\n",
                totalcount.LR, " Lab replicates\n"
                ))
 
-if(totalcount.DUP == 0){warning(paste0("    WARNING: NO DUPLICATES PRESENT\n"))}
-if(totalcount.N_DUPPARENT == 0){warning(paste0("    WARNING: NO DUP PARENTS PRESENT\n"))}
-if(totalcount.EB == 0){warning(paste0("    WARNING: NO EBs PRESENT\n"))}
+# if(totalcount.DUP == 0){warning(paste0("    WARNING: NO DUPLICATES PRESENT\n"))}
+# if(totalcount.N_DUPPARENT == 0){warning(paste0("    WARNING: NO DUP PARENTS PRESENT\n"))}
+# if(totalcount.EB == 0){warning(paste0("    WARNING: NO EBs PRESENT\n"))}
 if(totalcount.FB == 0){warning(paste0("    WARNING: NO FBs PRESENT (only required for Routine data)\n"))}
 # if(totalcount.FB > 0){warning(paste0("    WARNING: FBs PRESENT (only should be present for Routine data)\n"))}
 if(totalcount.MS == 0){warning(paste0("    WARNING: NO MSs PRESENT\n"))}
@@ -341,7 +316,7 @@ RIBSdata.ALL_corr <- RIBSdata.ALL %>%
     SITE_ID == '02-CHAD-2.2' ~ '02-CHAD-1.9',
     SITE_ID == '10-SARA-0.4' ~ '10-SARA-0.3',
     SITE_ID == '13-ROND-9.9' ~ '13-ROND-9.2',
-
+    SITE_ID == '14-NEVR-1.3' ~ '14-NEVR-8.9',
     TRUE ~ SITE_ID
   )
   ) %>% 
@@ -358,6 +333,7 @@ RIBSdata.sample_corr <- RIBSdata.sample %>%
     SITE_ID == '02-CHAD-2.2' ~ '02-CHAD-1.9',
     SITE_ID == '10-SARA-0.4' ~ '10-SARA-0.3',
     SITE_ID == '13-ROND-9.9' ~ '13-ROND-9.2',
+    SITE_ID == '14-NEVR-1.3' ~ '14-NEVR-8.9',
 
     TRUE ~ SITE_ID
     )
