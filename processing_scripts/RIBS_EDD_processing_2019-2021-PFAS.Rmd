@@ -400,7 +400,7 @@ sample.proj <- RIBSdata.sample_corr %>%
 
 # Split out projects to perform completeness checks
 sample.ribs <- sample.proj %>% 
-  filter(grepl("Routine_CECs", DEC_project))
+  filter(grepl("*Routine", DEC_project))
 
 sample.ribs.2019 <- sample.ribs %>% 
   filter(grepl("2019", sample_date),
@@ -421,13 +421,13 @@ sample.ribs.2021aug <- sample.ribs %>%
          ) 
 
 sample.meth <- sample.proj %>% 
-  filter(grepl("CEC_methods_eval", DEC_project))
+  filter(grepl("*Methods", DEC_project))
 
 sample.pfaspw.apr <- sample.proj %>% 
-  filter(grepl("PFAS_priority_waters", DEC_project),
+  filter(grepl("*Priority", DEC_project),
          grepl("2021-04", sample_date))
 sample.pfaspw.aug <- sample.proj %>% 
-  filter(grepl("PFAS_priority_waters", DEC_project),
+  filter(grepl("*Priority", DEC_project),
          grepl("2021-08", sample_date))
 
 
@@ -450,27 +450,55 @@ missing.pfaspw.aug <- sites.pfaspw %>%
 ```
 
 
-Apply project names and write final tables to CSV 
+Apply project names, make final edits, and export final tables 
 ```{r}
 
 joblist <- joblist %>% 
   select(-DEC_team)
 
+# Also Recode Methods evaluation sample types as ME (normal sample) and MEFB (field blanks) in order to differentiate from Routine CEC samples.
 RIBSdata.ALL_corr.proj <- RIBSdata.ALL_corr %>% 
   left_join(joblist) %>% 
-  select(DEC_project, everything()) 
-  # filter(sample_source %in% "Field")
+  select(DEC_project, everything()) %>% 
+  mutate(DEC_sample_type = ifelse(grepl("*Methods", DEC_project) & DEC_sample_type == "N","ME", DEC_sample_type),
+         DEC_sample_type = ifelse(grepl("*Methods", DEC_project) & DEC_sample_type == "FB","MEFB", DEC_sample_type))
 
+RIBSdata.sample_corr.proj <- RIBSdata.sample_corr %>% 
+  left_join(joblist) %>% 
+  select(DEC_project, everything()) %>% 
+  mutate(DEC_sample_type = ifelse(grepl("*Methods", DEC_project) & DEC_sample_type == "N","ME", DEC_sample_type),
+         DEC_sample_type = ifelse(grepl("*Methods", DEC_project) & DEC_sample_type == "FB","MEFB", DEC_sample_type))
+
+
+RIBSdata.ALL.meth_eval <- RIBSdata.ALL_corr.proj %>% 
+  filter(grepl("*Methods", DEC_project))
+
+RIBSdata.ALL.routine_cec <- RIBSdata.ALL_corr.proj %>% 
+  filter(grepl("*Routine", DEC_project))
+
+RIBSdata.ALL.pfaspw <- RIBSdata.ALL_corr.proj %>% 
+  filter(grepl("*Priority", DEC_project))
+
+# Export pre-joined tables (for data analysis)
+write.csv(RIBSdata.ALL.meth_eval, file.path("C:/Users/gmlemley/New York State Office of Information Technology Services/BWAM - CECs/data/pfas", "methods_eval_ppcp_results_2021.csv"),row.names = FALSE)
+
+# Export pre-joined tables (for data analysis)
+write.csv(RIBSdata.ALL.routine_cec, file.path("C:/Users/gmlemley/New York State Office of Information Technology Services/BWAM - CECs/data/pfas", "routine_pfas_results_2019_2021.csv"),row.names = FALSE)
+
+# Export pre-joined tables (for data analysis)
+write.csv(RIBSdata.ALL.pfaspw, file.path("C:/Users/gmlemley/New York State Office of Information Technology Services/BWAM - CECs/data/pfas", "routine_ppcp_results_2019_2021.csv"),row.names = FALSE)
+
+
+# Export sample and result (all project) for adding to database and running through QAQC if needed.
 
 # # Export sample table
-# write.table(RIBSdata.sample_corr.proj, file= paste0(output.path,"/",output.sample.filename),sep=",", row.names = FALSE)
-# 
-# # Export results table
-# write.table(RIBSdata.result, file= paste0(output.path,"/",output.result.filename),sep=",", row.names = FALSE)
-# 
+write.table(RIBSdata.sample_corr.proj, file= paste0(output.path,"/",output.sample.filename),sep=",", row.names = FALSE)
 
-# Export pre-joined tables (for running through QAQC script)
-write.csv(RIBSdata.routine_cec, file.path("C:/Users/gmlemley/New York State Office of Information Technology Services/BWAM - CECs/data/ppcp", "routine_ppcp_results_2019_2021.csv"),row.names = FALSE)
+# # Export results table
+write.table(RIBSdata.result, file= paste0(output.path,"/",output.result.filename),sep=",", row.names = FALSE)
+
+# # Export full joined table
+write.table(RIBSdata.ALL_corr.proj, file= paste0(output.path,"/",output.filename),sep=",", row.names = FALSE)
 
 
 ```
