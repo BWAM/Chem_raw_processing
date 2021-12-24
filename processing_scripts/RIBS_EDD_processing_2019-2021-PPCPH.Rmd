@@ -407,7 +407,7 @@ if(length(siteids.mismatch2 > 0)){
 ```{r Completeness check}
 
 # Apply project names based on SDG
-joblist <- read_excel(file.path("C:/Users/gmlemley/New York State Office of Information Technology Services/BWAM - ALS/2021/kelso/job_list", "dec_kelso_joblist.xlsx")) %>% 
+joblist <- read_excel(file.path("C:/Users/gmlemley/New York State Office of Information Technology Services/BWAM - ALS/2021/kelso_2019_2021/job_list", "dec_kelso_joblist.xlsx")) %>% 
   select(sample_delivery_group, Project, Team)
 
 # Return missing EDDs from project list
@@ -449,17 +449,21 @@ k.2021aug.missing <- sites.routine %>%
 ```
 
 
-Write final tables to CSV (Remember to copy report or Rmd to output dir)
+Apply project names, make final edits, and export final tables 
 ```{r}
 
-# Apply project names based on SDG
-joblist <- read_excel(file.path("C:/Users/gmlemley/New York State Office of Information Technology Services/BWAM - ALS/2021/kelso/job_list", "dec_kelso_joblist.xlsx")) %>% 
-  select(sample_delivery_group, Project, Team)
-
+# Also Recode Methods evaluation sample types as ME (normal sample) and MEFB (field blanks) in order to differentiate from Routine CEC samples.
 RIBSdata.ALL_corr.proj <- RIBSdata.ALL_corr %>% 
   left_join(joblist) %>% 
-  select(Project, Team, everything()) 
-  # filter(sample_source %in% "Field")
+  select(Project, Team, everything()) %>% 
+  mutate(DEC_sample_type = ifelse(grepl("*Methods", Project) & DEC_sample_type == "N","ME", DEC_sample_type),
+         DEC_sample_type = ifelse(grepl("*Methods", Project) & DEC_sample_type == "FB","MEFB", DEC_sample_type))
+
+RIBSdata.sample_corr.proj <- RIBSdata.sample_corr %>% 
+  left_join(joblist) %>% 
+  select(Project, Team, everything()) %>% 
+  mutate(DEC_sample_type = ifelse(grepl("*Methods", Project) & DEC_sample_type == "N","ME", DEC_sample_type),
+         DEC_sample_type = ifelse(grepl("*Methods", Project) & DEC_sample_type == "FB","MEFB", DEC_sample_type))
 
 # Check job list against data for missing EDDs
 k.missing <- joblist %>% 
@@ -467,37 +471,29 @@ k.missing <- joblist %>%
   filter(!sample_delivery_group %in% RIBSdata.ALL_corr.proj$sample_delivery_group)
 # Missing K2103837 (analysis canceled due to resampling needed) and K2109730 (not yet received)
 
-RIBSdata.meth_eval <- RIBSdata.ALL_corr.proj %>% 
-  filter(Project %in% "CEC Methods Eval")
 
-# Manually check methods eval data for missing sites
-# > sort(unique(RIBSdata.meth_eval$SITE_ID))
-# [1] "10-BOQT-2.6"   "10-SABL-14.6"  "10-SARA-0.3"   "11-UHUD-267.8" "11-UHUD-42.5"  "13-LHUD-125.8" "13-ROND-9.2"   "13-WALK-18.6"  "17-BRNX-5.6" 
-# # Mohawk is missing (EDD K2109730)
 
 RIBSdata.routine_cec <- RIBSdata.ALL_corr.proj %>% 
   filter(grepl("*Routine", Project))
 
-# # Export sample table
-# write.table(RIBSdata.sample_corr.proj, file= paste0(output.path,"/",output.sample.filename),sep=",", row.names = FALSE)
-# 
-# # Export results table
-# write.table(RIBSdata.result, file= paste0(output.path,"/",output.result.filename),sep=",", row.names = FALSE)
-# 
-# # Export batch table
-# write.table(RIBSdata.batch, file= paste0(output.path,"/",output.batch.filename),sep=",", row.names = FALSE)
+RIBSdata.meth_eval <- RIBSdata.ALL_corr.proj %>% 
+  filter(Project %in% "CEC Methods Eval")
 
-# Export pre-joined tables (for running through QAQC script)
+# Export pre-joined tables (for data analysis)
 write.csv(RIBSdata.routine_cec, file.path("C:/Users/gmlemley/New York State Office of Information Technology Services/BWAM - CECs/data/ppcp", "routine_ppcp_results_2019_2021.csv"),row.names = FALSE)
 
+# Export pre-joined tables (for data analysis)
+write.csv(RIBSdata.meth_eval, file.path("C:/Users/gmlemley/New York State Office of Information Technology Services/BWAM - CECs/data/ppcp", "methods_eval_ppcp_results_2021.csv"),row.names = FALSE)
 
-# Export sample and batch (all data) for adding to database
+# Export sample and result (all project) for adding to database and running through QAQC if needed.
+
 # # Export sample table
-# write.table(RIBSdata.sample_corr.proj, file= paste0(output.path,"/",output.sample.filename),sep=",", row.names = FALSE)
-# 
+write.table(RIBSdata.sample_corr.proj, file= paste0(output.path,"/",output.sample.filename),sep=",", row.names = FALSE)
+
 # # Export results table
-# write.table(RIBSdata.result, file= paste0(output.path,"/",output.result.filename),sep=",", row.names = FALSE)
+write.table(RIBSdata.result, file= paste0(output.path,"/",output.result.filename),sep=",", row.names = FALSE)
 
-
+# # Export full joined table
+write.table(RIBSdata.ALL_corr.proj, file= paste0(output.path,"/",output.filename),sep=",", row.names = FALSE)
 ```
 

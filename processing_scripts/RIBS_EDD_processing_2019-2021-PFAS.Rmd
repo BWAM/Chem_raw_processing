@@ -480,13 +480,13 @@ RIBSdata.ALL.pfaspw <- RIBSdata.ALL_corr.proj %>%
   filter(grepl("*Priority", DEC_project))
 
 # Export pre-joined tables (for data analysis)
-write.csv(RIBSdata.ALL.meth_eval, file.path("C:/Users/gmlemley/New York State Office of Information Technology Services/BWAM - CECs/data/pfas", "methods_eval_ppcp_results_2021.csv"),row.names = FALSE)
+write.csv(RIBSdata.ALL.meth_eval, file.path("C:/Users/gmlemley/New York State Office of Information Technology Services/BWAM - CECs/data/pfas", "methods_eval_pfas_results_2021.csv"),row.names = FALSE)
 
 # Export pre-joined tables (for data analysis)
 write.csv(RIBSdata.ALL.routine_cec, file.path("C:/Users/gmlemley/New York State Office of Information Technology Services/BWAM - CECs/data/pfas", "routine_pfas_results_2019_2021.csv"),row.names = FALSE)
 
 # Export pre-joined tables (for data analysis)
-write.csv(RIBSdata.ALL.pfaspw, file.path("C:/Users/gmlemley/New York State Office of Information Technology Services/BWAM - CECs/data/pfas", "routine_ppcp_results_2019_2021.csv"),row.names = FALSE)
+write.csv(RIBSdata.ALL.pfaspw, file.path("C:/Users/gmlemley/New York State Office of Information Technology Services/BWAM - CECs/data/pfas", "priority_waters_pfas_results_2019_2021.csv"),row.names = FALSE)
 
 
 # Export sample and result (all project) for adding to database and running through QAQC if needed.
