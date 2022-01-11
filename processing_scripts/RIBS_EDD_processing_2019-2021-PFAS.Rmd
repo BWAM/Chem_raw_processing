@@ -456,12 +456,15 @@ Apply project names, make final edits, and export final tables
 joblist <- joblist %>% 
   select(-DEC_team)
 
-# Also Recode Methods evaluation sample types as ME (normal sample) and MEFB (field blanks) in order to differentiate from Routine CEC samples.
+# Also Recode Methods evaluation sample types as ME (normal sample) and MEFB (field blanks) in order to differentiate from normal CEC samples.
+# and add event id field for pulling relavent samples into Methods Eval tables
 RIBSdata.ALL_corr.proj <- RIBSdata.ALL_corr %>% 
   left_join(joblist) %>% 
   select(DEC_project, everything()) %>% 
   mutate(DEC_sample_type = ifelse(grepl("*Methods", DEC_project) & DEC_sample_type == "N","ME", DEC_sample_type),
-         DEC_sample_type = ifelse(grepl("*Methods", DEC_project) & DEC_sample_type == "FB","MEFB", DEC_sample_type))
+         DEC_sample_type = ifelse(grepl("*Methods", DEC_project) & DEC_sample_type == "FB","MEFB", DEC_sample_type),
+         event_id = paste0(SITE_ID, "_", format(sample_date, "%Y%m%d"))
+  )
 
 RIBSdata.sample_corr.proj <- RIBSdata.sample_corr %>% 
   left_join(joblist) %>% 
@@ -469,18 +472,50 @@ RIBSdata.sample_corr.proj <- RIBSdata.sample_corr %>%
   mutate(DEC_sample_type = ifelse(grepl("*Methods", DEC_project) & DEC_sample_type == "N","ME", DEC_sample_type),
          DEC_sample_type = ifelse(grepl("*Methods", DEC_project) & DEC_sample_type == "FB","MEFB", DEC_sample_type))
 
-
-RIBSdata.ALL.meth_eval <- RIBSdata.ALL_corr.proj %>% 
-  filter(grepl("*Methods", DEC_project))
-
+# Subset by project 
 RIBSdata.ALL.routine_cec <- RIBSdata.ALL_corr.proj %>% 
   filter(grepl("*Routine", DEC_project))
 
 RIBSdata.ALL.pfaspw <- RIBSdata.ALL_corr.proj %>% 
   filter(grepl("*Priority", DEC_project))
 
+# Subset methods eval and pull in associated Routine and PFAS PW samples by common event IDs
+
+RIBSdata.ALL.meth_eval <- RIBSdata.ALL_corr.proj %>% 
+  filter(grepl("*Methods", DEC_project))
+
+events.meth_eval <- RIBSdata.ALL.meth_eval %>% 
+  distinct(event_id) %>% 
+  filter(!grepl("QAQC", event_id))
+
+RIBSdata.ALL.meth_eval.routine <- RIBSdata.ALL.routine_cec %>% 
+  filter(event_id %in% events.meth_eval$event_id)
+
+RIBSdata.ALL.meth_eval.pfaspw <- RIBSdata.ALL.pfaspw %>% 
+  filter(event_id %in% events.meth_eval$event_id)
+
+RIBSdata.ALL.meth_eval_ALL <- bind_rows(RIBSdata.ALL.meth_eval, RIBSdata.ALL.meth_eval.routine, RIBSdata.ALL.meth_eval.pfaspw)
+
+rm(RIBSdata.ALL.meth_eval, RIBSdata.ALL.meth_eval.routine, RIBSdata.ALL.meth_eval.pfaspw, events.meth_eval)
+
+```
+
+```{r Simple tables}
+# Create simplified tables of results for export and analysis
+RIBSdata.ALL.meth_eval_ALL.simp <- RIBSdata.ALL.meth_eval_ALL %>% 
+  filter(result_type_code %in% "TRG",
+         !sample_type_code %in% c("LCS", "LCSD")) %>% 
+  select(DEC_project, SITE_ID, DEC_sample_type, sys_sample_code, job_number, data_provider, sample_name, sample_matrix_code, sample_type_code, sample_source, sample_date, sample_receipt_date, lab_anl_method_name, analysis_date, Fraction, test_type, analysis_location, dilution_factor, prep_method, prep_date, qc_level, lab_sample_id, subsample_amount, subsample_amount_unit, instrument_id, comment.y, preservative, final_volume, final_volume_unit, cas_rn, chemical_name, result_value, result_unit, result_error_delta, result_type_code, reportable_result, detect_flag, lab_qualifiers, interpreted_qualifiers, validated_yn, method_detection_limit, reporting_detection_limit, quantitation_limit, detection_limit_unit, minimum_detectable_conc)
+
+
+
+```
+
+
+```{r Exports}
+
 # Export pre-joined tables (for data analysis)
-write.csv(RIBSdata.ALL.meth_eval, file.path("C:/Users/gmlemley/New York State Office of Information Technology Services/BWAM - CECs/data/pfas", "methods_eval_pfas_results_2021.csv"),row.names = FALSE)
+write.csv(RIBSdata.ALL.meth_eval_ALL.simp, file.path("C:/Users/gmlemley/New York State Office of Information Technology Services/BWAM - CECs/data/pfas", "2021_methods_eval_pfas_results_2022-01-11.csv"),row.names = FALSE)
 
 # Export pre-joined tables (for data analysis)
 write.csv(RIBSdata.ALL.routine_cec, file.path("C:/Users/gmlemley/New York State Office of Information Technology Services/BWAM - CECs/data/pfas", "routine_pfas_results_2019_2021.csv"),row.names = FALSE)
@@ -500,6 +535,6 @@ write.table(RIBSdata.result, file= paste0(output.path,"/",output.result.filename
 # # Export full joined table
 write.table(RIBSdata.ALL_corr.proj, file= paste0(output.path,"/",output.filename),sep=",", row.names = FALSE)
 
-
 ```
+
 
