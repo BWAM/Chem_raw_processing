@@ -507,8 +507,14 @@ RIBSdata.ALL.meth_eval_ALL.simp <- RIBSdata.ALL.meth_eval_ALL %>%
          !sample_type_code %in% c("LCS", "LCSD")) %>% 
   select(DEC_project, SITE_ID, DEC_sample_type, sys_sample_code, job_number, data_provider, sample_name, sample_matrix_code, sample_type_code, sample_source, sample_date, sample_receipt_date, lab_anl_method_name, analysis_date, Fraction, test_type, analysis_location, dilution_factor, prep_method, prep_date, qc_level, lab_sample_id, subsample_amount, subsample_amount_unit, instrument_id, comment.y, preservative, final_volume, final_volume_unit, cas_rn, chemical_name, result_value, result_unit, result_error_delta, result_type_code, reportable_result, detect_flag, lab_qualifiers, interpreted_qualifiers, validated_yn, method_detection_limit, reporting_detection_limit, quantitation_limit, detection_limit_unit, minimum_detectable_conc)
 
+# Create simple export for AG's office data request
+routinececs.simple <- RIBSdata.ALL.routine_cec %>% 
+  filter(DEC_sample_type %in% "N", 
+         result_type_code %in% "TRG",
+         sample_type_code %in% "N") %>% 
+  select(DEC_project, SITE_ID, DEC_sample_type, sys_sample_code, data_provider, sample_date, lab_anl_method_name, cas_rn, chemical_name, result_value, result_unit, detect_flag, lab_qualifiers, method_detection_limit, reporting_detection_limit, quantitation_limit, detection_limit_unit)
 
-
+simp.unique <- lapply(routinececs.simple, unique)
 ```
 
 
@@ -534,6 +540,11 @@ write.table(RIBSdata.result, file= paste0(output.path,"/",output.result.filename
 
 # # Export full joined table
 write.table(RIBSdata.ALL_corr.proj, file= paste0(output.path,"/",output.filename),sep=",", row.names = FALSE)
+
+
+# Export data request for AG's office
+write.csv(routinececs.simple, file.path("C:/Users/gmlemley/New York State Office of Information Technology Services/BWAM - CECs/data/pfas", "RIBS_routine_pfas_simple.csv"),row.names = FALSE)
+
 
 ```
 
