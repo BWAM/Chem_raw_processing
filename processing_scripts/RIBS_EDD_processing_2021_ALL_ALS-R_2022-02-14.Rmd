@@ -197,13 +197,18 @@ for (i in 1:nfolder_list){
   temp_sample$DEC_sample_type <- ifelse(grepl(" FB",temp_sample$sample_name),"FB",temp_sample$DEC_sample_type)
   
   # Populate DEC_sample_type for duplicate samples.
-      # Accounts for different DUP variants ("-DUP"", " DUP", "WSDUP", "WDUP", and upper/lowercase instances)
+      # Accounts for different DUP variants
   temp_sample$DEC_sample_type <- ifelse(grepl("-[Ss][Ee][Qq]",temp_sample$sample_name),"DUP",temp_sample$DEC_sample_type)
   temp_sample$DEC_sample_type <- ifelse(grepl(" [Ss][Ee][Qq]",temp_sample$sample_name),"DUP",temp_sample$DEC_sample_type)
   temp_sample$DEC_sample_type <- ifelse(grepl("WS[Ss][Ee][Qq]",temp_sample$sample_name),"DUP",temp_sample$DEC_sample_type)
   temp_sample$DEC_sample_type <- ifelse(grepl("W[Ss][Ee][Qq]",temp_sample$sample_name),"DUP",temp_sample$DEC_sample_type)
   temp_sample$DEC_sample_type <- ifelse(grepl("[Ss][Ee][Qq]_",temp_sample$sample_name),"DUP",temp_sample$DEC_sample_type)
   
+  #### For 2 Mohawk project samples that used old "DUP" code - populate DEC_sample_type for DUP and N_DUPPARENT
+  temp_sample$DEC_sample_type <- ifelse(grepl("-DUP",temp_sample$sample_name),"DUP",temp_sample$DEC_sample_type)
+  dup.vec <- temp_sample$sys_sample_code[grepl("-DUP", temp_sample$sys_sample_code)]
+  parent.vec <- gsub("-DUP", "", dup.vec)
+  temp_sample$DEC_sample_type <- ifelse(temp_sample$sys_sample_code %in% parent.vec,"N_DUPPARENT",temp_sample$DEC_sample_type)
   
   # Populate DEC_sample_type for N_DUPPARENT cells by locating DUP samples and finding parent sample by removing DUP code. 
   # Updated 4/7/21 to perform on sys_sample_code instead of sample_name in case reanalyses present (was causing to fail).
