@@ -1,0 +1,449 @@
+---
+title: "RIBS_EDD_processing"
+author: "Gavin Lemley"
+date: "January 11, 2019"
+output: html_document
+---
+
+Load libraries, find the R-project root directory, and specify input/output files.
+```{r}
+library(tidyverse)
+library(readxl)
+root.dir <- rprojroot::find_root("Chem_raw_processing.Rproj")
+
+##### User-defined variables #####
+
+proj_name <- "pcbs_2017-2019"    # use only lowercase with underscores as spaces"
+# Need to manually create folders with this name in each "input" and "output" folders
+proj_year <- "2021"
+
+##################################
+
+
+input.path <- file.path(root.dir, "data_input", proj_year, proj_name)
+output.path <- file.path(root.dir, "data_output", proj_year, proj_name)
+
+output.filename <- paste0(proj_year, "_chem_preqaqc_JOIN-", proj_name, "_", Sys.Date(), ".csv")
+output.sample.filename <- paste0(proj_year, "_chem_preqaqc_SAMPLE-", proj_name, "_", Sys.Date(), ".csv")
+output.result.filename <- paste0(proj_year, "_chem_preqaqc_RESULT-", proj_name, "_", Sys.Date(), ".csv")
+# output.batch.filename <- paste0(proj_year, "_chem_preqaqc_BATCH-", proj_name, "_", Sys.Date(), ".csv")
+
+#Specify sites reference table
+sites.master.all <- read_csv("C:/Users/gmlemley/New York State Office of Information Technology Services/SMAS - Streams Data Modernization/Cleaned Files/Final_Sites_ITS/Master_S_Site_v2_created_2021_12_07.csv") %>%
+  rename(SITE_ID = SITE_HISTORY_ID)
+
+# Routine sites list
+sites.routine <- read_excel(file.path(root.dir, "data_input/site_tables/RIBS_ROUTINE_SITES_REGION_INFO_2020-09-14.xlsx")) %>% 
+  rename(SITE_ID = "SBU ID") %>% 
+  select(SITE_ID)
+
+#2021 sites list
+sites.2021 <- read_excel(file.path(root.dir, "data_input/site_tables/c2021_Sites_crosswalk_summary_v4_created_20211116.xlsx")) %>%
+  rename(SITE_ID = SMAS_HISTORY_ID) %>% 
+  select(SITE_ID, ORIGINAL_SITE_ID)
+
+sites.2021.bind <- sites.2021 %>% 
+  select(SITE_ID) %>% 
+  unique()
+
+#2021 Mohawk sites (not in above list yet)
+# sites.mo.2021 <- read_excel(file.path(root.dir, "data_input/site_tables/Mohawk_2021_site_list.xlsx")) 
+
+# sites.master <- bind_rows(sites.routine, sites.2021, sites.mo.2021)
+sites.master <- bind_rows(sites.routine, sites.2021.bind)
+```
+
+
+
+Main process
+```{r}
+
+# Initialize loop objects and variables 
+folder_list <- list.files(path = input.path)
+nfolder_list = length(folder_list)
+RSfile_list <- list()
+sample.file_list <- list()
+result.file_list <- list()
+# batch.file_list <- list()
+i=1
+i=3
+
+message(paste0(nfolder_list, " EDDs present:\n"))
+
+# Loop through each file (folder) present in folder_list
+for (i in 1:nfolder_list){
+  print(folder_list[i])
+  input.i <- paste0(input.path, "/", folder_list[i])
+  output.i <- file.path(root.dir, "data_output")
+
+  # Check to make sure header exists in sample file (starts with "#"). Assumes result file has header if so.
+  # headcheck <- read.table(text = gsub("\t",",", readLines(file.path(input.i,"Sample_v3.txt"))), sep=",") %>% 
+  #   slice_head()
+  # if(grepl("#", headcheck$V1) == FALSE){
+  #   stop(paste0("    HEADER NOT PRESENT (script stopped) - ", folder_list[i]))
+  # }
+  # rm(headcheck)
+                          
+  temp_result <- read.table(text = gsub("\t",",", readLines(file.path(input.i,"TestResultQC_v3.txt"))), 
+                            # skip = 1,
+                            sep=",",fill=TRUE,header=FALSE,stringsAsFactors=FALSE,    
+                            col.names = c("sys_sample_code","lab_anl_method_name","analysis_date","fraction","column_number",
+                                          "test_type","lab_matrix_code","analysis_location","basis","container_id","dilution_factor",
+                                          "prep_method","prep_date","leachate_method","leachate_date","lab_name_code","qc_level",
+                                          "lab_sample_id","percent_moisture","subsample_amount","subsample_amount_unit","analyst_name",
+                                          "instrument_id","comment","preservative","final_volume","final_volume_unit","cas_rn","chemical_name",
+                                          "result_value","result_error_delta","result_type_code","reportable_result","detect_flag",
+                                          "lab_qualifiers","validator_qualifiers","interpreted_qualifiers","validated_yn",
+                                          "method_detection_limit","reporting_detection_limit","quantitation_limit","result_unit",
+                                          "detection_limit_unit","tic_retention_time","minimum_detectable_conc","counting_error","uncertainty",
+                                          "critical_value","validation_level","result_comment","qc_original_conc","qc_spike_added",
+                                          "qc_spike_measured","qc_spike_recovery","qc_dup_original_conc","qc_dup_spike_added",
+                                          "qc_dup_spike_measured","qc_dup_spike_recovery","qc_rpd","qc_spike_lcl","qc_spike_ucl","qc_rpd_cl",
+                                          "qc_spike_status","qc_dup_spike_status","qc_rpd_status","lab_sdg"),
+                            colClasses = c(fraction="character")
+  )
+  
+  
+  temp_sample <- read.table(text = gsub("\t",",", readLines(file.path(input.i,"Sample_v3.txt"))), 
+                            # skip = 1,
+                            sep=",",fill=TRUE,header=FALSE,stringsAsFactors=FALSE,
+                            col.names = c("data_provider","sys_sample_code","sample_name","sample_matrix_code","sample_type_code",
+                                          "sample_source","parent_sample_code","sample_delivery_group","sample_date","sys_loc_code",
+                                          "start_depth","end_depth","depth_unit","chain_of_custody","sent_to_lab_date","sample_receipt_date",
+                                          "sampler","sampling_company_code","sampling_reason","sampling_technique","task_code",
+                                          "collection_quarter","composite_yn","composite_desc","sample_class","custom_field_1","custom_field_2",
+                                          "custom_field_3","comment"))
+  
+  # temp_batch <- read.table(text = gsub("\t",",", readLines(file.path(input.i,"Batch_v3.txt"))), 
+  #                          skip = 1,
+  #                          sep=",",fill=TRUE,header=FALSE,stringsAsFactors=FALSE,
+  #                          col.names = c("sys_sample_code",	"lab_anl_method_name",	"analysis_date",	"fraction",	"column_number",	"test_type", 
+  #                                        "test_batch_type", "test_batch_id"),
+  #                          colClasses = c(fraction="character")
+  # ) 
+
+  
+  #### PCB EDD CORRECTIONS ####
+  
+  temp_sample <- temp_sample %>% 
+    mutate(sample_matrix_code = ifelse(is.na(sample_matrix_code), ifelse(sample_source %in% "Field", "WS", "WQ"),sample_matrix_code))
+  
+  ##########  Generating site IDs  ##########  
+  
+  # Duplicate sample_name field and convert all spaces to dashes before pulling site IDs ###
+  temp_sample <- temp_sample %>% 
+    mutate(sample_name_temp = sample_name) %>% 
+    mutate(sample_name_temp = sub(" ", "-", sample_name_temp))
+  
+  ### Generate site IDs for all non-lab sample data by pulling info from sample_name before 3rd "-".
+  temp_sample$SITE_ID <- ifelse(temp_sample$sample_matrix_code %in% c("WS", "SO"),
+                               sub("^(([^-]*-){2}[^-]*).*","\\1" , temp_sample$sample_name_temp), NA)
+
+    ## Alternative method #2 to generating SITE_ID. Pulls string from before first underscore
+    # temp_sample$SITE_ID <- ifelse(temp_sample$sample_matrix_code == "WS",
+    #                            str_extract(temp_sample$sample_name_temp, "[^_]+"), NA)
+    
+  ## Alternative method #3 to generating SITE_ID. Pulls string from position after decimal (as expected in river mile). WOrks better for older data:
+        ## DOES NOT WORK IF NO DECIMAL PRESENT (some site IDs use -001 as rivermile)
+    # temp_sample$SITE_ID <- ifelse(temp_sample$sample_matrix_code == "WS",
+    #                            substr(temp_sample$sample_name_temp, 1, as.numeric(gregexpr(pattern ='\\.',temp_sample$sample_name_temp)) + 1), NA)
+  
+
+  # Set Site ID to LAB_INTERNAL for such samples
+  temp_sample$SITE_ID <- ifelse(temp_sample$sample_matrix_code == "WQ", "00-QAQC-0.0", temp_sample$SITE_ID)
+  
+  # Delete temp column
+  temp_sample <- temp_sample %>% 
+    select(-sample_name_temp)
+  
+  ###########################################
+  
+    
+  ##### Locate and code QAQC samples #####
+
+  # Populate DEC_sample_type for EB samples.
+  temp_sample$DEC_sample_type <- ifelse(grepl("-EB",temp_sample$sample_name),"EB", NA)
+  # temp_sample$DEC_sample_type <- ifelse(grepl("WS-EB",temp_sample$sample_name),"EB",temp_sample$DEC_sample_type)
+  temp_sample$DEC_sample_type <- ifelse(grepl(" EB",temp_sample$sample_name),"EB",temp_sample$DEC_sample_type)
+  temp_sample$DEC_sample_type <- ifelse(grepl("EB_",temp_sample$sample_name),"EB",temp_sample$DEC_sample_type)
+
+  # Populate DEC_sample_type for FB samples. (only used in Routine data, where mercury samples exist)
+  temp_sample$DEC_sample_type <- ifelse(grepl("-FB",temp_sample$sample_name),"FB",temp_sample$DEC_sample_type)
+  # temp_sample$DEC_sample_type <- ifelse(grepl("WS-FB",temp_sample$sample_name),"FB",temp_sample$DEC_sample_type)  
+  temp_sample$DEC_sample_type <- ifelse(grepl(" FB",temp_sample$sample_name),"FB",temp_sample$DEC_sample_type)
+  
+  # Populate DEC_sample_type for duplicate samples.
+      # Accounts for different DUP variants
+  temp_sample$DEC_sample_type <- ifelse(grepl("-[Ss][Ee][Qq]",temp_sample$sample_name),"DUP",temp_sample$DEC_sample_type)
+  temp_sample$DEC_sample_type <- ifelse(grepl(" [Ss][Ee][Qq]",temp_sample$sample_name),"DUP",temp_sample$DEC_sample_type)
+  temp_sample$DEC_sample_type <- ifelse(grepl("WS[Ss][Ee][Qq]",temp_sample$sample_name),"DUP",temp_sample$DEC_sample_type)
+  temp_sample$DEC_sample_type <- ifelse(grepl("W[Ss][Ee][Qq]",temp_sample$sample_name),"DUP",temp_sample$DEC_sample_type)
+  temp_sample$DEC_sample_type <- ifelse(grepl("[Ss][Ee][Qq]_",temp_sample$sample_name),"DUP",temp_sample$DEC_sample_type)
+  
+  #### For 2 Mohawk project samples that used old "DUP" code - populate DEC_sample_type for DUP and N_DUPPARENT
+  temp_sample$DEC_sample_type <- ifelse(grepl("-DUP",temp_sample$sample_name),"DUP",temp_sample$DEC_sample_type)
+  dup.vec <- temp_sample$sys_sample_code[grepl("-DUP", temp_sample$sys_sample_code)]
+  parent.vec <- gsub("-DUP", "", dup.vec)
+  temp_sample$DEC_sample_type <- ifelse(temp_sample$sys_sample_code %in% parent.vec,"N_DUPPARENT",temp_sample$DEC_sample_type)
+  
+  # Populate DEC_sample_type for N_DUPPARENT cells by locating DUP samples and finding parent sample by removing DUP code. 
+  # Updated 4/7/21 to perform on sys_sample_code instead of sample_name in case reanalyses present (was causing to fail).
+  dup.vec <- temp_sample$sys_sample_code[grepl("-[Ss][Ee][Qq]", temp_sample$sys_sample_code)]
+  parent.vec <- gsub("-[Ss][Ee][Qq]", "", dup.vec)
+  temp_sample$DEC_sample_type <- ifelse(temp_sample$sys_sample_code %in% parent.vec,"N_DUPPARENT",temp_sample$DEC_sample_type)
+  
+  dup.vec <- temp_sample$sys_sample_code[grepl(" [Ss][Ee][Qq]", temp_sample$sys_sample_code)]
+  parent.vec <- gsub(" [Ss][Ee][Qq]", "", dup.vec)
+  temp_sample$DEC_sample_type <- ifelse(temp_sample$sys_sample_code %in% parent.vec,"N_DUPPARENT",temp_sample$DEC_sample_type)
+  
+  dup.vec <- temp_sample$sys_sample_code[grepl("WS[Ss][Ee][Qq]", temp_sample$sys_sample_code)]
+  parent.vec <- gsub("WS[Ss][Ee][Qq]", "WS", dup.vec)
+  temp_sample$DEC_sample_type <- ifelse(temp_sample$sys_sample_code %in% parent.vec,"N_DUPPARENT",temp_sample$DEC_sample_type)
+  
+  dup.vec <- temp_sample$sys_sample_code[grepl("W[Ss][Ee][Qq]", temp_sample$sys_sample_code)]
+  parent.vec <- gsub("W[Ss][Ee][Qq]", "W", dup.vec)
+  temp_sample$DEC_sample_type <- ifelse(temp_sample$sys_sample_code %in% parent.vec,"N_DUPPARENT",temp_sample$DEC_sample_type)
+
+  dup.vec <- temp_sample$sys_sample_code[grepl("[Ss][Ee][Qq]_", temp_sample$sys_sample_code)]
+  parent.vec <- gsub("[Ss][Ee][Qq]_", "_", dup.vec)
+  temp_sample$DEC_sample_type <- ifelse(temp_sample$sys_sample_code %in% parent.vec,"N_DUPPARENT",temp_sample$DEC_sample_type)
+
+  # Identify internal lab samples in DEC_sample_type_field
+  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_matrix_code == "WQ", "LAB_INTERNAL", temp_sample$DEC_sample_type)  
+  # Identify trib blanks (Mohawk 2019) in DEC_sample_type field
+  temp_sample$DEC_sample_type <- ifelse(temp_sample$sample_type_code == "TB", "TB", temp_sample$DEC_sample_type)
+  
+  # Populate remaining DEC_sample_type NAs for field data with "N" for normal samples (assumes all remaining NAs are normal samples).
+  temp_sample$DEC_sample_type <- ifelse(is.na(temp_sample$DEC_sample_type),"N",temp_sample$DEC_sample_type)
+
+  # Count number of each FIELD sample type identified and print
+  count.Normal <- length(temp_sample$DEC_sample_type[temp_sample$sample_source == "Field" & grepl("^N$", temp_sample$DEC_sample_type)])  
+  message(paste0(count.Normal," N"))
+  
+  count.N_DUPPARENT <- length(temp_sample$DEC_sample_type[temp_sample$sample_source == "Field" & grepl("N_DUPPARENT", temp_sample$DEC_sample_type)])  
+  message(paste0(count.N_DUPPARENT," N_DUPPARENT"))
+  
+  count.DUP <- length(temp_sample$DEC_sample_type[temp_sample$sample_source == "Field" & grepl("^DUP$", temp_sample$DEC_sample_type)])  
+  message(paste0(count.DUP," DUP"))
+  
+  count.EB <- length(temp_sample$DEC_sample_type[temp_sample$sample_source == "Field" & grepl("^EB$", temp_sample$DEC_sample_type)])  
+  message(paste0(count.EB," EB"))
+  
+  count.FB <- length(temp_sample$DEC_sample_type[temp_sample$sample_source == "Field" & grepl("^FB$", temp_sample$DEC_sample_type)])  
+  message(paste0(count.FB," FB\n"))
+  
+  # count.MS <- length(grep("^MS$", temp_sample$sample_type_code))  
+  # message(paste0(count.MS," MS (including lab MSs)\n"))
+  
+  # Check if equal number of DUP and N_DUPPARENT codes assigned. Stop script if not.
+  if(identical(count.DUP,count.N_DUPPARENT) == FALSE){
+    stop("    DUP and N_DUPPARENT counts do not match (script stopped)")
+  }
+    
+  ##### Merge sample and result files #####
+    # Must merge by sys_sample_code and not sample_name in order to appropriately associate MS, dissolved samples (sometimes "Diss" or "S" added to end of sys_sample_code), and other lab samples with appropriate results.
+  
+  temp_RSmerge <- merge(temp_sample,temp_result,by="sys_sample_code", all=TRUE)
+
+  filenm <- file.path(output.i,
+                      paste(folder_list[i],"_RSmerge.csv", sep=""))
+
+  if ((nrow(temp_result)) < (nrow(temp_RSmerge))) {
+    stop('SCRIPT STOPPED: Extra records created in merge. Check EDD for errors.')
+  }
+  if ((nrow(temp_result)) > (nrow(temp_RSmerge))) {
+    stop('SCRIPT STOPPED: Not enough records created with merge. Check for errors.')
+  }
+
+  ### FOR TROUBLESHOOTING EDD IMPORT (uncomment lines below) -  Name and create a dataframe for each separate table 
+  # mergenm <- paste0(folder_list[i], "_RSmerge")
+  # mergefile <- assign(mergenm, temp_RSmerge)
+  # mergenm.sample <- paste0(folder_list[i], "_Samplemerge")
+  # mergefile.sample <- assign(mergenm.sample, temp_sample)
+  # mergenm.result <- paste0(folder_list[i], "_Resultmerge")
+  # mergefile.result <- assign(mergenm.result, temp_result)
+  # # mergenm.batch <- paste0(folder_list[i], "_Batchmerge")
+  # # mergefile.batch <- assign(mergenm.batch, temp_batch)
+  
+  #Add current data frames to the list dataframes
+  RSfile_list[[i]] <- temp_RSmerge
+  sample.file_list[[i]] <- temp_sample
+  result.file_list[[i]] <- temp_result
+  # batch.file_list[[i]] <- mergefile.batch
+  
+  # Export each merged EDD as CSVs (use for troubleshooting)
+  # write.table(temp_RSmerge, file=filenm,sep=",", row.names = FALSE)
+  
+  rm(temp_RSmerge, temp_sample, temp_result)
+}
+
+#Bind all data frames (merged sample-result files) into one
+RIBSdata.ALL = do.call(rbind, RSfile_list)
+RIBSdata.sample = do.call(rbind, sample.file_list)
+RIBSdata.result = do.call(rbind, result.file_list)
+# RIBSdata.batch = do.call(rbind, batch.file_list)
+
+# Move new Site ID and DEC Sample Type columns to beginning of data frame
+RIBSdata.ALL <- RIBSdata.ALL %>% 
+  select(SITE_ID, DEC_sample_type, everything())
+RIBSdata.sample <- RIBSdata.sample %>% 
+  select(SITE_ID, DEC_sample_type, everything())
+
+
+# List unqique sampling dates to verify all present
+sample.dates <- unique(as.Date(RIBSdata.sample$sample_date[RIBSdata.sample$sample_source == "Field"], "%m/%d/%Y %H:%M:%S"))
+# sample.dates <- unique(as.Date(RIBSdata.sample$sample_date[RIBSdata.sample$sample_source == "Field"], "%Y-%m-%d %H:%M:%S"))
+message(paste0(length(sample.dates)," unique sample dates present:\n"))
+cat(as.character(sort(sample.dates)), sep = "\n")
+
+
+
+### Summarize sample counts to compare to COCs (ensure sure all codes assigned appropriately).
+# Rebuilt code code block below when expanded code assignments to lab samples
+
+totalcount.Normal <- length(RIBSdata.sample$DEC_sample_type[RIBSdata.sample$sample_source == "Field" & grepl("^N$", RIBSdata.sample$DEC_sample_type)])
+totalcount.DUP <- length(RIBSdata.sample$DEC_sample_type[RIBSdata.sample$sample_source == "Field" & grepl("^DUP$", RIBSdata.sample$DEC_sample_type)])
+totalcount.N_DUPPARENT <- length(RIBSdata.sample$DEC_sample_type[RIBSdata.sample$sample_source == "Field" & grepl("N_DUPPARENT", RIBSdata.sample$DEC_sample_type)])
+totalcount.EB <- length(RIBSdata.sample$DEC_sample_type[RIBSdata.sample$sample_source == "Field" & grepl("^EB$", RIBSdata.sample$DEC_sample_type)])
+totalcount.FB <- length(RIBSdata.sample$DEC_sample_type[RIBSdata.sample$sample_source == "Field" & grepl("^FB$", RIBSdata.sample$DEC_sample_type)])     # FB only present in Routine Network data
+totalcount.MS <- length(RIBSdata.sample$DEC_sample_type[RIBSdata.sample$sample_source == "Lab" & RIBSdata.sample$sample_type_code == "MS"]) 
+totalcount.MSD <- length(RIBSdata.sample$DEC_sample_type[RIBSdata.sample$sample_source == "Lab" & RIBSdata.sample$sample_type_code == "SD"]) 
+totalcount.LR <- length(RIBSdata.sample$DEC_sample_type[RIBSdata.sample$sample_source == "Lab" & RIBSdata.sample$sample_type_code == "LR"]) 
+
+message(paste0("\nTotal samples identified (+1 for each subcontracted sample :)\n", 
+               totalcount.Normal, " N\n", 
+               totalcount.N_DUPPARENT, " N_DUPPARENT\n", 
+               totalcount.DUP, " DUP\n",  
+               totalcount.EB, " EB\n", 
+               totalcount.FB, " FB (should only be present for Routine)\n" ,
+               totalcount.MS, " Matrix Spikes (not run on all params for all samples)\n",
+               totalcount.MSD, " Matrix Spike Dups\n",
+               totalcount.LR, " Lab replicates\n"
+               ))
+
+if(totalcount.DUP == 0){warning(paste0("    WARNING: NO DUPLICATES PRESENT\n"))}
+if(totalcount.N_DUPPARENT == 0){warning(paste0("    WARNING: NO DUP PARENTS PRESENT\n"))}
+if(totalcount.EB == 0){warning(paste0("    WARNING: NO EBs PRESENT\n"))}
+if(totalcount.FB == 0){warning(paste0("    WARNING: NO FBs PRESENT (only required for Routine data)\n"))}
+# if(totalcount.FB > 0){warning(paste0("    WARNING: FBs PRESENT (only should be present for Routine data)\n"))}
+if(totalcount.MS == 0){warning(paste0("    WARNING: NO MSs PRESENT\n"))}
+
+# Check for ALS reanalyses (could mean duplicate results for one sample/param combination)
+reanalyses <- RIBSdata.ALL$sys_sample_code[(endsWith(RIBSdata.ALL$sys_sample_code,"RE"))]
+if(length(reanalyses) > 0){
+  message("\nWARNING: Reanalyses present (possible duplicate results for one sample/param combination): \n\n",cat(reanalyses, sep = "\n"))
+} 
+
+```
+
+See if matches for generated site IDs exist in master sites table. If mismatches are found, process into code for copy/pasting into next chunk for correcting. 2nd instance of each site ID (after the ~) to be corrected manually after pasting next chunk.
+# Use RIBSdata.sample (sample list only) to help troubleshoot site ID mismatch issues.
+# Use space at top of this chunk if edits needed before matching site IDs
+```{r echo=TRUE}
+########################
+
+
+# List unique site IDs generated and creat match/mismatch lists
+siteids.present <- unique(RIBSdata.ALL$SITE_ID[!is.na(RIBSdata.ALL$SITE_ID)])
+siteids.mismatch <- siteids.present[!(siteids.present %in% sites.master$SITE_ID)]
+siteids.match <- siteids.present[(siteids.present %in% sites.master$SITE_ID)]
+
+# See if mismatches exist. If so (else), prepare code for renaming mismatched site IDs and print to console to be pasted into the chunk below. 2nd instance of each site ID (after the ~) to be corrected manually after pasting in chunk below.
+if (length(siteids.mismatch) == 0 & length(siteids.match) > 0) {
+  message("Match found for all ", length(siteids.match), " site IDs.")
+} else{
+  message(length(siteids.present)," unique site IDs generated from sample IDs\n",length(siteids.match), " matches found, ", length(siteids.mismatch), " mismatch(es):\n")
+  siteids.mismatch.code <- paste0("    SITE_ID == '",siteids.mismatch,"' ~ '",siteids.mismatch,"',")
+  cat(siteids.mismatch.code,sep="\n")
+}
+
+# message("\n\nUnique site ID's present in sys_loc_code field (as transcribed by ALS)")
+# sort(unique(RIBSdata.sample$sys_loc_code))
+
+```
+
+SITE_ID and data corrections:
+Run as many times as needed until all corrected.
+User manually corrects site IDs that couldn't be located in master sites table by pasting the output code from above and correct the 2nd instance of each site ID (after the ~).
+```{r correct_data,echo=TRUE}
+RIBSdata.ALL_corr <- RIBSdata.ALL %>% 
+  mutate(SITE_ID_corr = case_when(
+    SITE_ID == '03EMIL-5.1-EB_08142017_WS' ~ '03-EMIL-5.1',
+    SITE_ID == '03EMIL-5.1_08142017_WS' ~ '03-EMIL-5.1',
+    SITE_ID == '00-QAQC-0.0' ~ '00-QAQC-0.0',
+    SITE_ID == '03EMIL-5.1-DUP_10172017_AW' ~ '03-EMIL-5.1',
+    SITE_ID == '03EMIL-5.1-FB_10172017_WS' ~ '03-EMIL-5.1',
+    SITE_ID == '03EMIL-5.1_10172017_AW' ~ '03-EMIL-5.1',
+    TRUE ~ SITE_ID
+  )
+  ) %>% 
+  mutate(SITE_ID_CORR_IND = if_else(SITE_ID_corr == SITE_ID, "N", "Y")) %>% 
+  select(-SITE_ID) %>% 
+  select(SITE_ID_corr, SITE_ID_CORR_IND, everything()) %>% 
+  rename(SITE_ID = SITE_ID_corr)
+
+# Do the same for the sample file
+
+RIBSdata.sample_corr <- RIBSdata.sample %>% 
+  mutate(SITE_ID_corr = case_when(
+    SITE_ID == '03EMIL-5.1-EB_08142017_WS' ~ '03-EMIL-5.1',
+    SITE_ID == '03EMIL-5.1_08142017_WS' ~ '03-EMIL-5.1',
+    SITE_ID == '00-QAQC-0.0' ~ '00-QAQC-0.0',
+    SITE_ID == '03EMIL-5.1-DUP_10172017_AW' ~ '03-EMIL-5.1',
+    SITE_ID == '03EMIL-5.1-FB_10172017_WS' ~ '03-EMIL-5.1',
+    SITE_ID == '03EMIL-5.1_10172017_AW' ~ '03-EMIL-5.1',
+    TRUE ~ SITE_ID
+    )
+  ) %>% 
+  mutate(SITE_ID_CORR_IND = if_else(SITE_ID_corr == SITE_ID, "N", "Y")) %>% 
+  select(-SITE_ID) %>% 
+  select(SITE_ID_corr, SITE_ID_CORR_IND, everything()) %>% 
+  rename(SITE_ID = SITE_ID_corr)
+  
+# Check again for mismatches and print
+siteids.present.corr <- unique(RIBSdata.ALL_corr$SITE_ID[!is.na(RIBSdata.ALL_corr$SITE_ID)])
+siteids.mismatch2 <- siteids.present.corr[!(siteids.present.corr %in% sites.master$SITE_ID)]
+siteids.match2 <- siteids.present.corr[(siteids.present.corr %in% sites.master$SITE_ID)]
+
+if(length(siteids.mismatch2 > 0)){
+  message("The following ", length(siteids.mismatch2), " sites were still not matched:")
+  cat(siteids.mismatch2,sep="\n")
+} else{
+  message("All sites matched!")
+}
+```
+
+```{r PCB EDD fixes}
+
+# lab_matrix_code (a non-null field in the DB) is blank for 2018 EDDs. Join from sample file.
+
+RIBSdata.sample_corr_matrix <- RIBSdata.sample_corr %>% 
+  rename(lab_sdg = sample_delivery_group) %>% 
+  select(sys_sample_code, lab_sdg, sample_matrix_code)
+
+RIBSdata.result_fix <- RIBSdata.result %>% 
+  left_join(RIBSdata.sample_corr_matrix) %>% 
+  mutate(lab_matrix_code = ifelse(is.na(lab_matrix_code), sample_matrix_code, lab_matrix_code)) %>% 
+  select(-sample_matrix_code)
+
+```
+
+
+Write final tables to CSV (Remember to copy report or Rmd to output dir)
+```{r, eval=FALSE}
+
+# Export sample table
+write.table(RIBSdata.sample_corr, file= paste0(output.path,"/",output.sample.filename),sep=",", row.names = FALSE)
+
+# Export results table
+write.table(RIBSdata.result_fix, file= paste0(output.path,"/",output.result.filename),sep=",", row.names = FALSE)
+
+# Export batch table
+# write.table(RIBSdata.batch, file= paste0(output.path,"/",output.batch.filename),sep=",", row.names = FALSE)
+
+# Export pre-joined table (for running through QAQC script)
+write.table(RIBSdata.ALL_corr, file= paste0(output.path,"/",output.filename),sep=",", row.names = FALSE)
+
+
+```
+
