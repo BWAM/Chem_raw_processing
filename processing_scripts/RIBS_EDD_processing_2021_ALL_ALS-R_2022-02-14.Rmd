@@ -185,6 +185,8 @@ for (i in 1:nfolder_list){
     
   ##### Locate and code QAQC samples #####
 
+
+  
   # Populate DEC_sample_type for EB samples.
   temp_sample$DEC_sample_type <- ifelse(grepl("-EB",temp_sample$sample_name),"EB", NA)
   # temp_sample$DEC_sample_type <- ifelse(grepl("WS-EB",temp_sample$sample_name),"EB",temp_sample$DEC_sample_type)
@@ -195,6 +197,11 @@ for (i in 1:nfolder_list){
   temp_sample$DEC_sample_type <- ifelse(grepl("-FB",temp_sample$sample_name),"FB",temp_sample$DEC_sample_type)
   # temp_sample$DEC_sample_type <- ifelse(grepl("WS-FB",temp_sample$sample_name),"FB",temp_sample$DEC_sample_type)  
   temp_sample$DEC_sample_type <- ifelse(grepl(" FB",temp_sample$sample_name),"FB",temp_sample$DEC_sample_type)
+  
+  # Populate DEC_sample_type for SSB (source solution blank; lab DI blanks) samples.
+  temp_sample$DEC_sample_type <- ifelse(grepl("-SSB",temp_sample$sample_name),"SSB", temp_sample$DEC_sample_type)
+  temp_sample$DEC_sample_type <- ifelse(grepl(" SSB",temp_sample$sample_name),"SSB", temp_sample$DEC_sample_type)
+  temp_sample$DEC_sample_type <- ifelse(grepl("_SSB",temp_sample$sample_name),"SSB", temp_sample$DEC_sample_type)  
   
   # Populate DEC_sample_type for duplicate samples.
       # Accounts for different DUP variants
@@ -329,6 +336,7 @@ totalcount.Normal <- length(RIBSdata.sample$DEC_sample_type[RIBSdata.sample$samp
 totalcount.DUP <- length(RIBSdata.sample$DEC_sample_type[RIBSdata.sample$sample_source == "Field" & grepl("^DUP$", RIBSdata.sample$DEC_sample_type)])
 totalcount.N_DUPPARENT <- length(RIBSdata.sample$DEC_sample_type[RIBSdata.sample$sample_source == "Field" & grepl("N_DUPPARENT", RIBSdata.sample$DEC_sample_type)])
 totalcount.EB <- length(RIBSdata.sample$DEC_sample_type[RIBSdata.sample$sample_source == "Field" & grepl("^EB$", RIBSdata.sample$DEC_sample_type)])
+totalcount.SSB <- length(RIBSdata.sample$DEC_sample_type[RIBSdata.sample$sample_source == "Field" & grepl("^SSB$", RIBSdata.sample$DEC_sample_type)])
 totalcount.FB <- length(RIBSdata.sample$DEC_sample_type[RIBSdata.sample$sample_source == "Field" & grepl("^FB$", RIBSdata.sample$DEC_sample_type)])     # FB only present in Routine Network data
 totalcount.MS <- length(RIBSdata.sample$DEC_sample_type[RIBSdata.sample$sample_source == "Lab" & RIBSdata.sample$sample_type_code == "MS"]) 
 totalcount.MSD <- length(RIBSdata.sample$DEC_sample_type[RIBSdata.sample$sample_source == "Lab" & RIBSdata.sample$sample_type_code == "SD"]) 
@@ -340,6 +348,7 @@ message(paste0("\nTotal samples identified (+1 for each subcontracted sample :)\
                totalcount.DUP, " DUP\n",  
                totalcount.EB, " EB\n", 
                totalcount.FB, " FB (should only be present for Routine)\n" ,
+               totalcount.SSB, " SSB (tech park lab DI blanks)\n" ,
                totalcount.MS, " Matrix Spikes (not run on all params for all samples)\n",
                totalcount.MSD, " Matrix Spike Dups\n",
                totalcount.LR, " Lab replicates\n"
